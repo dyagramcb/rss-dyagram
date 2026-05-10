@@ -1,4 +1,4 @@
-const cacheName = "rss-dyagram-pwa-20260510-14";
+const cacheName = "rss-dyagram-pwa-20260510-15";
 const shellAssets = [
   "/",
   "/index.html",
