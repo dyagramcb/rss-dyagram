@@ -28,7 +28,7 @@ const defaultGroup = "Geral";
 const groupPrefix = "group:";
 const refreshIntervalMs = 10 * 60 * 1000;
 const settingsRefreshIntervalMs = 60 * 1000;
-const appVersion = "20260510-scoped-read-ids-1";
+const appVersion = "20260510-scoped-read-ids-2";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -242,7 +242,7 @@ function saveReadIds() {
 function uniqueFeeds(feeds) {
   const seen = new Set();
   return feeds.map(normalizeFeed).filter((feed) => {
-    const key = feed.url.trim();
+    const key = feedUrlKey(feed.url);
     if (!key || seen.has(key)) {
       return false;
     }
@@ -255,11 +255,11 @@ function uniqueFeeds(feeds) {
 function restoreDefaultFeedGroups(feeds) {
   const defaultByUrl = new Map(defaultFeeds.map((feed) => {
     const normalized = normalizeFeed(feed);
-    return [normalized.url, normalized];
+    return [feedUrlKey(normalized.url), normalized];
   }));
 
   return feeds.map((feed) => {
-    const defaultFeed = defaultByUrl.get(feed.url);
+    const defaultFeed = defaultByUrl.get(feedUrlKey(feed.url));
     if (!defaultFeed || groupKey(feed.group) !== groupKey(defaultGroup)) {
       return feed;
     }
@@ -295,6 +295,39 @@ function normalizeGroup(value) {
 
 function groupKey(value) {
   return normalizeGroup(value).toLocaleLowerCase("pt-PT");
+}
+
+function feedUrlKey(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  try {
+    const parsed = new URL(raw);
+    const isFacebook = /(^|\.)facebook\.com$/i.test(parsed.hostname);
+    const profileId = parsed.searchParams.get("id");
+
+    parsed.protocol = parsed.protocol.toLowerCase();
+    parsed.hostname = isFacebook ? "www.facebook.com" : parsed.hostname.toLowerCase();
+    parsed.hash = "";
+
+    if (isFacebook) {
+      parsed.pathname = `/${parsed.pathname.replace(/^\/+|\/+$/g, "")}`;
+      parsed.search = "";
+      if (/^\/profile\.php$/i.test(parsed.pathname) && profileId) {
+        parsed.searchParams.set("id", profileId);
+      }
+    }
+
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return raw.replace(/\/$/, "");
+  }
+}
+
+function sameFeedUrl(left, right) {
+  return feedUrlKey(left) === feedUrlKey(right);
 }
 
 function matchingGroup(value) {
@@ -442,7 +475,7 @@ async function loadFeed(feed) {
     }
 
     const discovered = await discoverFeedDetails(feed.url);
-    if (!discovered.url || discovered.url === feed.url) {
+    if (!discovered.url || sameFeedUrl(discovered.url, feed.url)) {
       throw error;
     }
 
@@ -503,7 +536,7 @@ function uniqueItems(items) {
 }
 
 function itemKey(item) {
-  return `${item.feedUrl}:${item.id}`;
+  return `${feedUrlKey(item.feedUrl)}:${item.id}`;
 }
 
 function activeItem() {
@@ -719,10 +752,13 @@ function renderSources() {
 function sourceButton(feed, options = {}) {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = `feed-button${options.child ? " feed-child" : ""}${state.selectedUrl === feed.url ? " active" : ""}`;
+  const active = feed.url === "all"
+    ? state.selectedUrl === "all"
+    : sameFeedUrl(state.selectedUrl, feed.url);
+  button.className = `feed-button${options.child ? " feed-child" : ""}${active ? " active" : ""}`;
   button.dataset.url = feed.url;
 
-  const feedItems = feed.url === "all" ? state.items : state.items.filter((item) => item.feedUrl === feed.url);
+  const feedItems = feed.url === "all" ? state.items : state.items.filter((item) => sameFeedUrl(item.feedUrl, feed.url));
   const count = unreadCount(feedItems);
   const meta = feed.error || `${formatUnreadCount(count)} por ler`;
   button.innerHTML = `
@@ -856,17 +892,17 @@ function feedsFromItems(items) {
 }
 
 function deleteFeed(feedUrl) {
-  const feed = managedFeeds().find((candidate) => candidate.url === feedUrl);
+  const feed = managedFeeds().find((candidate) => sameFeedUrl(candidate.url, feedUrl));
   if (!feed) {
     return "";
   }
 
-  const removedItems = state.items.filter((item) => item.feedUrl === feed.url);
+  const removedItems = state.items.filter((item) => sameFeedUrl(item.feedUrl, feed.url));
   removedItems.forEach((item) => state.readIds.delete(itemKey(item)));
-  state.items = state.items.filter((item) => item.feedUrl !== feed.url);
-  state.feeds = uniqueFeeds(state.feeds.filter((candidate) => candidate.url !== feed.url));
+  state.items = state.items.filter((item) => !sameFeedUrl(item.feedUrl, feed.url));
+  state.feeds = uniqueFeeds(state.feeds.filter((candidate) => !sameFeedUrl(candidate.url, feed.url)));
 
-  if (state.selectedUrl === feed.url || (
+  if (sameFeedUrl(state.selectedUrl, feed.url) || (
     isGroupValue(state.selectedUrl) &&
     !state.feeds.some((candidate) => candidate.group === groupFromValue(state.selectedUrl))
   )) {
@@ -1179,7 +1215,7 @@ function sourceMatchesSelection(item) {
     return item.feedGroup === groupFromValue(state.selectedUrl);
   }
 
-  return item.feedUrl === state.selectedUrl;
+  return sameFeedUrl(item.feedUrl, state.selectedUrl);
 }
 
 function selectedTitle() {
@@ -1191,7 +1227,7 @@ function selectedTitle() {
     return groupFromValue(state.selectedUrl);
   }
 
-  return state.feeds.find((feed) => feed.url === state.selectedUrl)?.name || "Newsfeed";
+  return state.feeds.find((feed) => sameFeedUrl(feed.url, state.selectedUrl))?.name || "Newsfeed";
 }
 
 function feedGroups() {
@@ -1662,7 +1698,7 @@ addFeedForm.addEventListener("submit", async (event) => {
 
   const selectedGroup = isGroupValue(state.selectedUrl) ? groupFromValue(state.selectedUrl) : "";
   const group = ensureGroup(feedGroupInput.value || selectedGroup);
-  const existingRawFeed = state.feeds.find((feed) => feed.url === url);
+  const existingRawFeed = state.feeds.find((feed) => sameFeedUrl(feed.url, url));
   if (existingRawFeed && existingRawFeed.url !== discovered.url) {
     existingRawFeed.url = discovered.url;
     existingRawFeed.name = discovered.title;
@@ -1676,7 +1712,7 @@ addFeedForm.addEventListener("submit", async (event) => {
     return;
   }
 
-  if (state.feeds.some((feed) => feed.url === discovered.url)) {
+  if (state.feeds.some((feed) => sameFeedUrl(feed.url, discovered.url))) {
     setStatus("Esse RSS já está na lista.");
     return;
   }
@@ -1751,9 +1787,9 @@ groupManagerList.addEventListener("change", (event) => {
   }
 
   groupManagerInteracted = true;
-  let feed = state.feeds.find((candidate) => candidate.url === event.target.dataset.feedUrl);
+  let feed = state.feeds.find((candidate) => sameFeedUrl(candidate.url, event.target.dataset.feedUrl));
   if (!feed) {
-    feed = managedFeeds().find((candidate) => candidate.url === event.target.dataset.feedUrl);
+    feed = managedFeeds().find((candidate) => sameFeedUrl(candidate.url, event.target.dataset.feedUrl));
     if (feed) {
       state.feeds.push(feed);
       state.feeds = uniqueFeeds(state.feeds);
@@ -1768,7 +1804,7 @@ groupManagerList.addEventListener("change", (event) => {
   saveFeeds();
 
   state.items.forEach((item) => {
-    if (item.feedUrl === feed.url) {
+    if (sameFeedUrl(item.feedUrl, feed.url)) {
       item.feedGroup = feed.group;
     }
   });
@@ -1787,7 +1823,7 @@ groupManagerList.addEventListener("click", (event) => {
   }
 
   groupManagerInteracted = true;
-  const feed = managedFeeds().find((candidate) => candidate.url === deleteButton.dataset.deleteFeedUrl);
+  const feed = managedFeeds().find((candidate) => sameFeedUrl(candidate.url, deleteButton.dataset.deleteFeedUrl));
   if (!feed || !window.confirm(`Apagar o feed "${feed.name}"?`)) {
     return;
   }
