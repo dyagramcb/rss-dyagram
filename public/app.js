@@ -28,7 +28,7 @@ const defaultGroup = "Geral";
 const groupPrefix = "group:";
 const refreshIntervalMs = 10 * 60 * 1000;
 const settingsRefreshIntervalMs = 60 * 1000;
-const appVersion = "20260510-delete-feeds-1";
+const appVersion = "20260510-delete-feeds-2";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -1712,6 +1712,11 @@ groupManagerList.addEventListener("click", (event) => {
   }
 
   groupManagerInteracted = true;
+  const feed = managedFeeds().find((candidate) => candidate.url === deleteButton.dataset.deleteFeedUrl);
+  if (!feed || !window.confirm(`Apagar o feed "${feed.name}"?`)) {
+    return;
+  }
+
   const deletedName = deleteFeed(deleteButton.dataset.deleteFeedUrl);
   if (!deletedName) {
     return;
