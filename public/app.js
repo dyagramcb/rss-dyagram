@@ -28,7 +28,7 @@ const defaultGroup = "Geral";
 const groupPrefix = "group:";
 const refreshIntervalMs = 10 * 60 * 1000;
 const settingsRefreshIntervalMs = 60 * 1000;
-const appVersion = "20260510-refresh-all-feeds-1";
+const appVersion = "20260510-scoped-read-ids-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -506,6 +506,10 @@ function itemKey(item) {
   return `${item.feedUrl}:${item.id}`;
 }
 
+function activeItem() {
+  return state.items.find((candidate) => itemKey(candidate) === state.activeReaderId);
+}
+
 function mergeKnownItemData(items, previousItems) {
   const previousByKey = new Map(previousItems.map((item) => [itemKey(item), item]));
   const previousByLink = new Map(previousItems
@@ -858,7 +862,7 @@ function deleteFeed(feedUrl) {
   }
 
   const removedItems = state.items.filter((item) => item.feedUrl === feed.url);
-  removedItems.forEach((item) => state.readIds.delete(item.id));
+  removedItems.forEach((item) => state.readIds.delete(itemKey(item)));
   state.items = state.items.filter((item) => item.feedUrl !== feed.url);
   state.feeds = uniqueFeeds(state.feeds.filter((candidate) => candidate.url !== feed.url));
 
@@ -869,7 +873,7 @@ function deleteFeed(feedUrl) {
     state.selectedUrl = "all";
   }
 
-  if (removedItems.some((item) => item.id === state.activeReaderId)) {
+  if (removedItems.some((item) => itemKey(item) === state.activeReaderId)) {
     closeReader();
   }
 
@@ -934,7 +938,7 @@ function itemCard(item, index = 0) {
   article.className = `item-card${isRead(item) ? " read" : ""}`;
   article.tabIndex = 0;
   article.setAttribute("role", "button");
-  article.dataset.id = item.id;
+  article.dataset.id = itemKey(item);
   const date = item.date ? relativeTime(new Date(item.date)) : "sem data";
   const priorityAttribute = index < 6 ? ' fetchpriority="high"' : "";
   const imageMarkup = item.image
@@ -962,11 +966,11 @@ function itemCard(item, index = 0) {
     thumbnail.addEventListener("error", () => thumbnail.replaceWith(thumbPlaceholder()), { once: true });
   }
 
-  article.addEventListener("click", () => openReader(item.id));
+  article.addEventListener("click", () => openReader(itemKey(item)));
   article.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      openReader(item.id);
+      openReader(itemKey(item));
     }
   });
 
@@ -1007,7 +1011,7 @@ async function hydrateMissingImages(items) {
 
       if (!hadImage && item.image) {
         scheduleItemsRender();
-        if (state.activeReaderId === item.id) {
+        if (state.activeReaderId === itemKey(item)) {
           renderReader(item);
         }
       }
@@ -1051,7 +1055,7 @@ function isArticleLink(url) {
 }
 
 function openReader(itemId) {
-  const item = state.items.find((candidate) => candidate.id === itemId);
+  const item = state.items.find((candidate) => itemKey(candidate) === itemId);
   if (!item) {
     return;
   }
@@ -1067,7 +1071,7 @@ function openReader(itemId) {
   item.translationError = "";
 
   if (!isRead(item)) {
-    setItemRead(item.id, true);
+    setItemRead(item, true);
     render();
   }
 
@@ -1132,7 +1136,7 @@ function renderTranslationState(item) {
 }
 
 function closeReader() {
-  const item = state.items.find((candidate) => candidate.id === state.activeReaderId);
+  const item = activeItem();
   if (item?.translationLoading) {
     cancelTranslation(item);
   }
@@ -1143,14 +1147,16 @@ function closeReader() {
 }
 
 function isRead(item) {
-  return state.readIds.has(item.id);
+  return state.readIds.has(itemKey(item));
 }
 
-function setItemRead(itemId, read) {
+function setItemRead(item, read) {
+  const key = itemKey(item);
+
   if (read) {
-    state.readIds.add(itemId);
+    state.readIds.add(key);
   } else {
-    state.readIds.delete(itemId);
+    state.readIds.delete(key);
   }
 
   saveReadIds();
@@ -1266,13 +1272,13 @@ function renameGroup(oldName, newName) {
 }
 
 function markFilteredItemsRead() {
-  filteredItems().forEach((item) => state.readIds.add(item.id));
+  filteredItems().forEach((item) => state.readIds.add(itemKey(item)));
   saveReadIds();
   render();
 
-  const activeItem = state.items.find((item) => item.id === state.activeReaderId);
-  if (activeItem) {
-    renderReader(activeItem);
+  const item = activeItem();
+  if (item) {
+    renderReader(item);
   }
 }
 
@@ -1280,7 +1286,7 @@ async function loadArticleDetails(item) {
   item.articleLoading = true;
   item.articleError = "";
 
-  if (state.activeReaderId === item.id) {
+  if (state.activeReaderId === itemKey(item)) {
     renderReader(item);
   }
 
@@ -1291,7 +1297,7 @@ async function loadArticleDetails(item) {
     item.articleError = error.message || "Não foi possível ler a notícia.";
   } finally {
     item.articleLoading = false;
-    if (state.activeReaderId === item.id) {
+    if (state.activeReaderId === itemKey(item)) {
       renderReader(item);
     }
   }
@@ -1337,7 +1343,7 @@ function clearTranslation(item) {
 }
 
 async function toggleReaderTranslation() {
-  const item = state.items.find((candidate) => candidate.id === state.activeReaderId);
+  const item = activeItem();
   if (!item) {
     return;
   }
@@ -1407,7 +1413,7 @@ async function translateItem(item) {
 
     if (item.translationRequestId === requestId) {
       item.translationLoading = false;
-      if (state.activeReaderId === item.id) {
+      if (state.activeReaderId === itemKey(item)) {
         renderReader(item);
       }
     }
@@ -1802,12 +1808,12 @@ closeDrawerButton.addEventListener("click", closeDrawer);
 drawerBackdrop.addEventListener("click", closeDrawer);
 readerBack.addEventListener("click", closeReader);
 readerUnreadButton.addEventListener("click", () => {
-  const item = state.items.find((candidate) => candidate.id === state.activeReaderId);
+  const item = activeItem();
   if (!item) {
     return;
   }
 
-  setItemRead(item.id, !isRead(item));
+  setItemRead(item, !isRead(item));
   render();
   renderReader(item);
 });
