@@ -28,7 +28,7 @@ const defaultGroup = "Geral";
 const groupPrefix = "group:";
 const refreshIntervalMs = 10 * 60 * 1000;
 const settingsRefreshIntervalMs = 60 * 1000;
-const appVersion = "20260510-date-fallback-2";
+const appVersion = "20260510-refresh-all-feeds-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -50,6 +50,7 @@ let settingsSyncReady = false;
 let settingsSyncTimer = 0;
 let settingsSyncInFlight = false;
 let hasPendingSettingsSync = false;
+let feedRefreshInFlight = false;
 
 const feedList = document.querySelector("#feed-list");
 const itemsEl = document.querySelector("#items");
@@ -338,53 +339,98 @@ function imageUrl(url) {
 }
 
 async function loadAllFeeds() {
+  if (feedRefreshInFlight) {
+    return false;
+  }
+
+  feedRefreshInFlight = true;
   const previousItems = state.items;
   const previousItemKeys = new Set(previousItems.map(itemKey));
   state.loading = true;
-  state.feeds = uniqueFeeds(state.feeds);
+  state.feeds = managedFeeds();
   renderSources();
-  setStatus("A atualizar feeds...");
+  const feedsToLoad = state.feeds;
+  const totalFeeds = feedsToLoad.length;
 
-  const results = await Promise.allSettled(state.feeds.map(loadFeed));
-  const items = [];
-  const errors = [];
-
-  results.forEach((result, index) => {
-    const feed = state.feeds[index];
-
-    if (result.status === "fulfilled") {
-      feed.name = result.value.title || feed.name;
-      feed.lastLoaded = new Date().toISOString();
-      feed.error = "";
-      items.push(...result.value.items);
-    } else {
-      feed.error = result.reason.message;
-      errors.push(`${feed.name}: ${result.reason.message}`);
-    }
-  });
-
-  state.items = mergeKnownItemData(
-    uniqueItems(items).sort((a, b) => b.timestamp - a.timestamp),
-    previousItems
-  );
-  syncFeedsFromItems();
-  const newItems = state.items.filter((item) => !previousItemKeys.has(itemKey(item)));
-  syncMissingImages(newItems.length ? newItems : state.items, {
-    maxItems: newItems.length ? Number.POSITIVE_INFINITY : 24
-  });
-  state.feeds = uniqueFeeds(state.feeds);
-  state.groups = uniqueGroups([...state.groups, ...state.feeds.map((feed) => feed.group)]);
-  state.loading = false;
-  saveFeeds();
-  saveGroups();
-  render();
-
-  if (errors.length) {
-    setStatus(errors.join(" | "), true);
-    return;
+  if (!totalFeeds) {
+    state.loading = false;
+    feedRefreshInFlight = false;
+    render();
+    setStatus("Não há feeds para atualizar.");
+    return true;
   }
 
-  setStatus(`Atualizado às ${new Date().toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}.`);
+  setStatus(`A atualizar 0/${totalFeeds} feeds...`);
+
+  try {
+    const results = new Array(totalFeeds);
+    let completedFeeds = 0;
+
+    await runLimited(feedsToLoad, 4, async (feed, index) => {
+      try {
+        results[index] = {
+          status: "fulfilled",
+          value: await loadFeed(feed)
+        };
+      } catch (error) {
+        results[index] = {
+          status: "rejected",
+          reason: error
+        };
+      } finally {
+        completedFeeds += 1;
+        setStatus(`A atualizar ${completedFeeds}/${totalFeeds} feeds...`);
+      }
+    });
+
+    const items = [];
+    const errors = [];
+
+    results.forEach((result, index) => {
+      const feed = feedsToLoad[index];
+
+      if (result?.status === "fulfilled") {
+        feed.name = result.value.title || feed.name;
+        feed.lastLoaded = new Date().toISOString();
+        feed.error = "";
+        items.push(...result.value.items);
+      } else {
+        const message = result?.reason?.message || "Não foi possível ler o RSS.";
+        feed.error = message;
+        errors.push(`${feed.name}: ${message}`);
+      }
+    });
+
+    state.items = mergeKnownItemData(
+      uniqueItems(items).sort((a, b) => b.timestamp - a.timestamp),
+      previousItems
+    );
+    syncFeedsFromItems();
+    const newItems = state.items.filter((item) => !previousItemKeys.has(itemKey(item)));
+    syncMissingImages(newItems.length ? newItems : state.items, {
+      maxItems: newItems.length ? Number.POSITIVE_INFINITY : 24
+    });
+    state.feeds = uniqueFeeds(state.feeds);
+    state.groups = uniqueGroups([...state.groups, ...state.feeds.map((feed) => feed.group)]);
+    state.loading = false;
+    saveFeeds();
+    saveGroups();
+    render();
+
+    if (errors.length) {
+      const successfulFeeds = totalFeeds - errors.length;
+      const visibleErrors = errors.slice(0, 3).join(" | ");
+      const suffix = errors.length > 3 ? ` | +${errors.length - 3} falhas` : "";
+      setStatus(`Verificados ${totalFeeds}/${totalFeeds} feeds. Atualizados ${successfulFeeds}. Falharam: ${visibleErrors}${suffix}`, true);
+      return false;
+    }
+
+    setStatus(`Verificados ${totalFeeds}/${totalFeeds} feeds às ${new Date().toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}.`);
+    return true;
+  } finally {
+    state.loading = false;
+    feedRefreshInFlight = false;
+  }
 }
 
 async function loadFeed(feed) {
@@ -990,9 +1036,10 @@ async function runLimited(values, limit, worker) {
   const workerCount = Math.min(limit, values.length);
   const workers = Array.from({ length: workerCount }, async () => {
     while (index < values.length) {
+      const currentIndex = index;
       const value = values[index];
       index += 1;
-      await worker(value);
+      await worker(value, currentIndex);
     }
   });
 
@@ -1649,7 +1696,7 @@ groupCreateForm.addEventListener("submit", (event) => {
   render();
 });
 
-refreshAllButton.addEventListener("click", loadAllFeeds);
+refreshAllButton.addEventListener("click", refreshAllFeeds);
 markReadButton.addEventListener("click", markFilteredItemsRead);
 
 resetFeedsButton.addEventListener("click", async () => {
@@ -1845,7 +1892,7 @@ async function startApp() {
   await loadSharedSettings({ render: true });
   settingsSyncReady = true;
   await loadAllFeeds();
-  window.setInterval(loadAllFeeds, refreshIntervalMs);
+  window.setInterval(refreshAllFeeds, refreshIntervalMs);
   window.setInterval(refreshSharedSettings, settingsRefreshIntervalMs);
 }
 
@@ -1854,4 +1901,9 @@ async function refreshSharedSettings() {
   if (changed) {
     await loadAllFeeds();
   }
+}
+
+async function refreshAllFeeds() {
+  await loadSharedSettings({ render: true });
+  return loadAllFeeds();
 }
