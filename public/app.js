@@ -62,7 +62,6 @@ const searchInput = document.querySelector("#search");
 const addFeedForm = document.querySelector("#add-feed-form");
 const feedUrlInput = document.querySelector("#feed-url");
 const feedGroupInput = document.querySelector("#feed-group");
-const feedGroupsList = document.querySelector("#feed-groups");
 const groupCreateForm = document.querySelector("#group-create-form");
 const newGroupInput = document.querySelector("#new-group");
 const groupManager = document.querySelector("#group-manager");
@@ -817,8 +816,14 @@ function toggleGroup(group) {
 }
 
 function renderGroupSuggestions() {
-  feedGroupsList.innerHTML = "";
-  state.groups.forEach((group) => feedGroupsList.append(new Option(group)));
+  const currentValue = matchingGroup(feedGroupInput.value);
+  const selectedGroup = isGroupValue(state.selectedUrl) ? matchingGroup(groupFromValue(state.selectedUrl)) : "";
+  const preferredGroup = currentValue || selectedGroup;
+
+  feedGroupInput.innerHTML = "";
+  feedGroupInput.append(new Option("Escolher grupo", ""));
+  state.groups.forEach((group) => feedGroupInput.append(new Option(group, group)));
+  feedGroupInput.value = preferredGroup || "";
 }
 
 function renderGroupManager() {
