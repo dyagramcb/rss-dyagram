@@ -246,6 +246,10 @@ h1 {
   align-items: center;
 }
 
+.feed-edit-row {
+  grid-template-columns: minmax(0, 1fr) minmax(92px, 132px) auto;
+}
+
 .group-rename-row {
   padding-bottom: 8px;
   border-bottom: 1px solid var(--line);
@@ -266,6 +270,24 @@ h1 {
   min-height: 34px;
   font-size: 11px;
   padding-inline: 9px;
+}
+
+.feed-delete-button {
+  min-height: 34px;
+  border: 1px solid rgba(255, 98, 106, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 98, 106, 0.08);
+  color: var(--danger);
+  padding: 0 10px;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.feed-delete-button:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 4px rgba(255, 98, 106, 0.12);
+  outline: 0;
 }
 
 input,

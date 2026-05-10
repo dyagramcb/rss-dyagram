@@ -28,7 +28,7 @@ const defaultGroup = "Geral";
 const groupPrefix = "group:";
 const refreshIntervalMs = 10 * 60 * 1000;
 const settingsRefreshIntervalMs = 60 * 1000;
-const appVersion = "20260510-synced-feeds-2";
+const appVersion = "20260510-delete-feeds-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -144,12 +144,20 @@ async function loadSharedSettings(options = {}) {
     const sharedGroups = uniqueGroups(Array.isArray(settings.groups) ? settings.groups : []);
     const previousFeedKey = settingsFingerprint(state.feeds, state.groups);
 
-    state.feeds = uniqueFeeds([...sharedFeeds, ...state.feeds]);
-    state.groups = uniqueGroups([
-      ...sharedGroups,
-      ...state.groups,
-      ...state.feeds.map((feed) => feed.group)
-    ]);
+    if (settings.updatedAt) {
+      state.feeds = sharedFeeds;
+      state.groups = uniqueGroups([
+        ...sharedGroups,
+        ...sharedFeeds.map((feed) => feed.group)
+      ]);
+    } else {
+      state.feeds = uniqueFeeds([...sharedFeeds, ...state.feeds]);
+      state.groups = uniqueGroups([
+        ...sharedGroups,
+        ...state.groups,
+        ...state.feeds.map((feed) => feed.group)
+      ]);
+    }
     state.feeds.forEach((feed) => state.expandedGroups.add(groupKey(feed.group)));
 
     const changed = previousFeedKey !== settingsFingerprint(state.feeds, state.groups);
@@ -748,15 +756,18 @@ function renderGroupManager() {
   }
 
   movableFeeds.forEach((feed) => {
-    const label = document.createElement("label");
-    label.className = "group-manager-row";
-    label.innerHTML = `
+    const row = document.createElement("div");
+    row.className = "group-manager-row feed-edit-row";
+    row.innerHTML = `
       <span>${escapeHtml(feed.name)}</span>
       <select data-feed-url="${escapeAttribute(feed.url)}" aria-label="Grupo de ${escapeAttribute(feed.name)}">
         ${groupSelectOptions(feed.group)}
       </select>
+      <button class="feed-delete-button" type="button" data-delete-feed-url="${escapeAttribute(feed.url)}" aria-label="Apagar ${escapeAttribute(feed.name)}">
+        Apagar
+      </button>
     `;
-    groupManagerList.append(label);
+    groupManagerList.append(row);
   });
 
   groupManager.open = groupManagerInteracted ? wasOpen : false;
@@ -782,6 +793,33 @@ function feedsFromItems(items) {
     url: item.feedUrl,
     group: item.feedGroup
   })));
+}
+
+function deleteFeed(feedUrl) {
+  const feed = managedFeeds().find((candidate) => candidate.url === feedUrl);
+  if (!feed) {
+    return "";
+  }
+
+  const removedItems = state.items.filter((item) => item.feedUrl === feed.url);
+  removedItems.forEach((item) => state.readIds.delete(item.id));
+  state.items = state.items.filter((item) => item.feedUrl !== feed.url);
+  state.feeds = uniqueFeeds(state.feeds.filter((candidate) => candidate.url !== feed.url));
+
+  if (state.selectedUrl === feed.url || (
+    isGroupValue(state.selectedUrl) &&
+    !state.feeds.some((candidate) => candidate.group === groupFromValue(state.selectedUrl))
+  )) {
+    state.selectedUrl = "all";
+  }
+
+  if (removedItems.some((item) => item.id === state.activeReaderId)) {
+    closeReader();
+  }
+
+  saveReadIds();
+  saveFeeds();
+  return feed.name;
 }
 
 function groupSelectOptions(selectedGroup) {
@@ -1665,6 +1703,23 @@ groupManagerList.addEventListener("change", (event) => {
   }
 
   render();
+});
+
+groupManagerList.addEventListener("click", (event) => {
+  const deleteButton = event.target.closest("button[data-delete-feed-url]");
+  if (!deleteButton) {
+    return;
+  }
+
+  groupManagerInteracted = true;
+  const deletedName = deleteFeed(deleteButton.dataset.deleteFeedUrl);
+  if (!deletedName) {
+    return;
+  }
+
+  setStatus(`Feed "${deletedName}" apagado.`);
+  render();
+  groupManager.open = true;
 });
 
 searchInput.addEventListener("input", renderItems);
