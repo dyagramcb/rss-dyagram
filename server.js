@@ -570,11 +570,15 @@ function isFacebookPageUrl(feedUrl) {
 function canonicalFacebookPageUrl(feedUrl) {
   try {
     const parsed = new URL(feedUrl);
+    const profileId = parsed.searchParams.get("id");
     parsed.protocol = "https:";
     parsed.hostname = "www.facebook.com";
     parsed.search = "";
     parsed.hash = "";
     parsed.pathname = `/${parsed.pathname.replace(/^\/+|\/+$/g, "")}`;
+    if (/^\/profile\.php$/i.test(parsed.pathname) && profileId) {
+      parsed.searchParams.set("id", profileId);
+    }
     return parsed.toString().replace(/\/$/, "");
   } catch {
     return feedUrl;
@@ -592,7 +596,12 @@ function facebookPageTitle(rawTitle, feedUrl) {
 
 function facebookTitleFromUrl(feedUrl) {
   try {
-    const handle = new URL(feedUrl).pathname.split("/").filter(Boolean)[0] || "Facebook";
+    const parsed = new URL(feedUrl);
+    const handle = parsed.pathname.split("/").filter(Boolean)[0] || "Facebook";
+    if (/^profile\.php$/i.test(handle) && parsed.searchParams.get("id")) {
+      return parsed.searchParams.get("id");
+    }
+
     const known = {
       abolapt: "A BOLA",
       beirabaixatv: "Beira Baixa TV"
