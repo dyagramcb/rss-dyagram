@@ -95,20 +95,30 @@ async function writeSharedSettings(payload) {
 }
 
 function canUseBlobSettings() {
-  return Boolean(settingsStoreFactory || (getBlobStore && (
-    process.env.NETLIFY ||
-    process.env.NETLIFY_SITE_ID ||
-    process.env.AWS_LAMBDA_FUNCTION_NAME ||
-    process.env.CONTEXT
-  )));
+  return Boolean(getBlobStore && (settingsStoreFactory || blobSettingsCredentials()));
 }
 
 function getSettingsStore() {
+  const credentials = blobSettingsCredentials();
+  if (credentials) {
+    return getBlobStore({
+      name: "rss-dyagram",
+      ...credentials
+    });
+  }
+
   if (settingsStoreFactory) {
     return settingsStoreFactory();
   }
 
   return getBlobStore("rss-dyagram");
+}
+
+function blobSettingsCredentials() {
+  const siteID = process.env.RSS_DYAGRAM_BLOBS_SITE_ID || process.env.NETLIFY_SITE_ID || process.env.SITE_ID;
+  const token = process.env.RSS_DYAGRAM_BLOBS_TOKEN || process.env.NETLIFY_AUTH_TOKEN;
+
+  return siteID && token ? { siteID, token } : null;
 }
 
 function setSettingsStoreFactory(factory) {
