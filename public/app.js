@@ -28,7 +28,8 @@ const defaultGroup = "Geral";
 const groupPrefix = "group:";
 const refreshIntervalMs = 10 * 60 * 1000;
 const settingsRefreshIntervalMs = 60 * 1000;
-const feedRefreshConcurrency = 2;
+const regularFeedRefreshConcurrency = 4;
+const facebookRefreshDelayMs = 4000;
 const appVersion = "20260510-scoped-read-ids-2";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
@@ -407,7 +408,10 @@ async function loadAllFeeds() {
     const results = new Array(totalFeeds);
     let completedFeeds = 0;
 
-    await runLimited(feedsToLoad, feedRefreshConcurrency, async (feed, index) => {
+    const feedJobs = feedsToLoad.map((feed, index) => ({ feed, index }));
+    const regularFeedJobs = feedJobs.filter(({ feed }) => !isFacebookFeedUrl(feed.url));
+    const facebookFeedJobs = feedJobs.filter(({ feed }) => isFacebookFeedUrl(feed.url));
+    const loadFeedJob = async ({ feed, index }) => {
       try {
         results[index] = {
           status: "fulfilled",
@@ -422,7 +426,18 @@ async function loadAllFeeds() {
         completedFeeds += 1;
         setStatus(`A atualizar ${completedFeeds}/${totalFeeds} feeds...`);
       }
-    });
+    };
+
+    await runLimited(regularFeedJobs, regularFeedRefreshConcurrency, loadFeedJob);
+
+    for (let index = 0; index < facebookFeedJobs.length; index += 1) {
+      await loadFeedJob(facebookFeedJobs[index]);
+
+      if (index < facebookFeedJobs.length - 1) {
+        setStatus(`A atualizar ${completedFeeds}/${totalFeeds} feeds... pausa curta para o Facebook`);
+        await delay(facebookRefreshDelayMs);
+      }
+    }
 
     const items = [];
     const errors = [];
@@ -1108,6 +1123,10 @@ async function runLimited(values, limit, worker) {
   });
 
   await Promise.all(workers);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function isArticleLink(url) {
