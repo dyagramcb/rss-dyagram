@@ -28,7 +28,7 @@ const defaultGroup = "Geral";
 const groupPrefix = "group:";
 const refreshIntervalMs = 10 * 60 * 1000;
 const settingsRefreshIntervalMs = 60 * 1000;
-const appVersion = "20260510-delete-feeds-2";
+const appVersion = "20260510-date-fallback-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -518,7 +518,7 @@ function parseItem(entry, feed, feedTitle) {
   const description = textOf(entry, "description") || textOf(entry, "summary") || textOf(entry, "content") || "";
   const link = linkOf(entry) || feed.url;
   const dateText = textOf(entry, "pubDate") || textOf(entry, "updated") || textOf(entry, "published") || "";
-  const date = dateText ? new Date(dateText) : new Date();
+  const date = parseFeedDate(dateText);
   const image = imageOf(entry, description);
   const id = textOf(entry, "guid") || link || `${feed.url}-${title}`;
   const fullText = cleanText(description);
@@ -533,8 +533,8 @@ function parseItem(entry, feed, feedTitle) {
     fullText,
     link,
     image,
-    date: Number.isNaN(date.getTime()) ? "" : date.toISOString(),
-    timestamp: Number.isNaN(date.getTime()) ? 0 : date.getTime(),
+    date: date ? date.toISOString() : "",
+    timestamp: date ? date.getTime() : 0,
     interactions: feedInteractionsOf(entry),
     articleLoaded: false,
     articleLoading: false,
@@ -556,6 +556,16 @@ function textOf(root, selector) {
 
   const found = root.querySelector(selector);
   return found ? found.textContent.trim() : "";
+}
+
+function parseFeedDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return null;
+  }
+
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function linkOf(entry) {
@@ -879,7 +889,7 @@ function itemCard(item, index = 0) {
   article.tabIndex = 0;
   article.setAttribute("role", "button");
   article.dataset.id = item.id;
-  const date = item.date ? relativeTime(new Date(item.date)) : "";
+  const date = item.date ? relativeTime(new Date(item.date)) : "sem data";
   const priorityAttribute = index < 6 ? ' fetchpriority="high"' : "";
   const imageMarkup = item.image
     ? `<img class="thumb" src="${escapeAttribute(imageUrl(item.image))}" alt="" decoding="async"${priorityAttribute}>`
@@ -1027,7 +1037,10 @@ function openReader(itemId) {
 function renderReader(item) {
   const translated = item.showTranslation && item.translation;
   readerTitle.textContent = translated ? item.translation.title || item.title : item.title;
-  readerMeta.textContent = `by ${item.feedName.toLowerCase()} / ${item.date ? new Date(item.date).toLocaleString("pt-PT", { dateStyle: "short", timeStyle: "short" }) : ""}`;
+  const readerDate = item.date
+    ? new Date(item.date).toLocaleString("pt-PT", { dateStyle: "short", timeStyle: "short" })
+    : "sem data";
+  readerMeta.textContent = `by ${item.feedName.toLowerCase()} / ${readerDate}`;
   readerBody.textContent = translated
     ? item.translation.text || item.fullText || item.description || "Sem texto disponível no RSS."
     : item.fullText || item.description || "Sem texto disponível no RSS.";
@@ -1523,7 +1536,16 @@ function numberOrNull(value) {
 }
 
 function relativeTime(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return "sem data";
+  }
+
   const diffMs = Date.now() - date.getTime();
+
+  if (diffMs < -60000) {
+    return date.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit" });
+  }
+
   const minutes = Math.max(0, Math.floor(diffMs / 60000));
 
   if (minutes < 1) {

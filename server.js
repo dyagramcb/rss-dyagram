@@ -451,7 +451,7 @@ function parseFacebookPagePosts(html, pageUrl) {
       continue;
     }
 
-    const timestamp = firstParsedNumber(windowHtml, [/"creation_time":(\d+)/i]) || Math.floor(Date.now() / 1000);
+    const timestamp = facebookPostTimestamp(windowHtml);
     const interactions = parseFacebookInteractions(windowHtml);
     posts.push({
       id: postId,
@@ -459,7 +459,7 @@ function parseFacebookPagePosts(html, pageUrl) {
       description: message,
       link: postUrl,
       image: extractFacebookPostImage(windowHtml),
-      date: new Date(timestamp * 1000).toUTCString(),
+      date: timestamp ? new Date(timestamp * 1000).toUTCString() : "",
       likes: interactions.likes,
       shares: interactions.shares,
       comments: interactions.comments
@@ -471,6 +471,17 @@ function parseFacebookPagePosts(html, pageUrl) {
   }
 
   return posts;
+}
+
+function facebookPostTimestamp(html) {
+  const timestamp = firstParsedTimestamp(html, [
+    /"creation_time"\s*:\s*(\d{9,13})/i,
+    /"publish_time"\s*:\s*(\d{9,13})/i,
+    /"created_time"\s*:\s*(\d{9,13})/i,
+    /"publishTime"\s*:\s*(\d{9,13})/i
+  ]);
+
+  return timestamp;
 }
 
 function extractFacebookMessage(html) {
@@ -534,7 +545,7 @@ function facebookPostsToRss(feed) {
         <title>${escapeXml(post.title)}</title>
         <link>${escapeXml(post.link)}</link>
         <guid isPermaLink="false">${escapeXml(post.id)}</guid>
-        <pubDate>${escapeXml(post.date)}</pubDate>
+        ${post.date ? `<pubDate>${escapeXml(post.date)}</pubDate>` : ""}
         <description><![CDATA[${imageMarkup}${escapeCdata(post.description)}]]></description>
         ${post.image ? `<enclosure url="${escapeXml(post.image)}" type="image/jpeg" />` : ""}
         <likes>${post.likes ?? ""}</likes>
@@ -859,6 +870,32 @@ function firstParsedNumber(html, patterns) {
       if (number !== null) {
         return number;
       }
+    }
+  }
+
+  return null;
+}
+
+function firstParsedTimestamp(html, patterns) {
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (!match) {
+      continue;
+    }
+
+    let timestamp = Number(match[1]);
+    if (!Number.isFinite(timestamp)) {
+      continue;
+    }
+
+    if (timestamp > 1000000000000) {
+      timestamp = Math.floor(timestamp / 1000);
+    }
+
+    const earliestAccepted = Date.UTC(2005, 0, 1) / 1000;
+    const latestAccepted = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60);
+    if (timestamp >= earliestAccepted && timestamp <= latestAccepted) {
+      return timestamp;
     }
   }
 
