@@ -94,7 +94,12 @@ async function writeSharedSettings(payload) {
 }
 
 function canUseBlobSettings() {
-  return Boolean(getBlobStore && (process.env.NETLIFY || process.env.NETLIFY_SITE_ID));
+  return Boolean(getBlobStore && (
+    process.env.NETLIFY ||
+    process.env.NETLIFY_SITE_ID ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.CONTEXT
+  ));
 }
 
 function getSettingsStore() {
