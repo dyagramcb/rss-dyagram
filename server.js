@@ -414,10 +414,10 @@ async function fetchFacebookPageFeed(feedUrl) {
     throw new Error(`O Facebook respondeu com HTTP ${response.status}.`);
   }
 
-  const pageTitle = extractMetaContent(html, "og:title") || "Facebook";
+  const pageTitle = facebookPageTitle(extractMetaContent(html, "og:title"), feedUrl);
   const posts = parseFacebookPagePosts(html, feedUrl);
   const body = facebookPostsToRss({
-    title: pageTitle.replace(/\s*\|.*$/, "").trim() || pageTitle,
+    title: pageTitle,
     link: feedUrl,
     description: extractMetaContent(html, "og:description") || "",
     posts
@@ -578,6 +578,37 @@ function canonicalFacebookPageUrl(feedUrl) {
     return parsed.toString().replace(/\/$/, "");
   } catch {
     return feedUrl;
+  }
+}
+
+function facebookPageTitle(rawTitle, feedUrl) {
+  const cleaned = String(rawTitle || "").replace(/\s*\|.*$/, "").trim();
+  if (cleaned && !/^facebook$/i.test(cleaned)) {
+    return cleaned;
+  }
+
+  return facebookTitleFromUrl(feedUrl);
+}
+
+function facebookTitleFromUrl(feedUrl) {
+  try {
+    const handle = new URL(feedUrl).pathname.split("/").filter(Boolean)[0] || "Facebook";
+    const known = {
+      abolapt: "A BOLA",
+      beirabaixatv: "Beira Baixa TV"
+    };
+    const key = handle.toLowerCase();
+
+    if (known[key]) {
+      return known[key];
+    }
+
+    return handle
+      .replace(/[-_.]+/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase())
+      .trim() || "Facebook";
+  } catch {
+    return "Facebook";
   }
 }
 
