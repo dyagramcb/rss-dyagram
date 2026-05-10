@@ -28,6 +28,7 @@ const defaultGroup = "Geral";
 const groupPrefix = "group:";
 const refreshIntervalMs = 10 * 60 * 1000;
 const settingsRefreshIntervalMs = 60 * 1000;
+const feedRefreshConcurrency = 2;
 const appVersion = "20260510-scoped-read-ids-2";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
@@ -329,6 +330,14 @@ function sameFeedUrl(left, right) {
   return feedUrlKey(left) === feedUrlKey(right);
 }
 
+function isFacebookFeedUrl(url) {
+  try {
+    return /(^|\.)facebook\.com$/i.test(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
 function matchingGroup(value) {
   const key = groupKey(value);
   return state.groups.find((group) => groupKey(group) === key) || "";
@@ -398,7 +407,7 @@ async function loadAllFeeds() {
     const results = new Array(totalFeeds);
     let completedFeeds = 0;
 
-    await runLimited(feedsToLoad, 4, async (feed, index) => {
+    await runLimited(feedsToLoad, feedRefreshConcurrency, async (feed, index) => {
       try {
         results[index] = {
           status: "fulfilled",
@@ -420,8 +429,17 @@ async function loadAllFeeds() {
 
     results.forEach((result, index) => {
       const feed = feedsToLoad[index];
+      const previousFeedItems = previousItems.filter((item) => sameFeedUrl(item.feedUrl, feed.url));
 
       if (result?.status === "fulfilled") {
+        if (isFacebookFeedUrl(feed.url) && !result.value.items.length) {
+          const message = "O Facebook devolveu o feed vazio neste momento.";
+          feed.error = message;
+          errors.push(`${feed.name}: ${message}`);
+          items.push(...previousFeedItems);
+          return;
+        }
+
         feed.name = result.value.title || feed.name;
         feed.lastLoaded = new Date().toISOString();
         feed.error = "";
@@ -430,6 +448,7 @@ async function loadAllFeeds() {
         const message = result?.reason?.message || "Não foi possível ler o RSS.";
         feed.error = message;
         errors.push(`${feed.name}: ${message}`);
+        items.push(...previousFeedItems);
       }
     });
 

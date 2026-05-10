@@ -19,6 +19,8 @@ const settingsPath = path.join(dataDir, "rss-dyagram-settings.json");
 const cache = new Map();
 const cacheTtlMs = 5 * 60 * 1000;
 const feedTimeoutMs = 8 * 1000;
+const facebookFeedTimeoutMs = 8 * 1000;
+const facebookFeedBudgetMs = 9 * 1000;
 const imageTimeoutMs = 8 * 1000;
 const articleTimeoutMs = 10 * 1000;
 const discoverTimeoutMs = 10 * 1000;
@@ -400,35 +402,84 @@ function imageRequestHeaders(imageUrl) {
 }
 
 async function fetchFacebookPageFeed(feedUrl) {
-  const pageUrl = toMbasicFacebookUrl(feedUrl);
-  const response = await fetchWithTimeout(pageUrl, {
-    headers: {
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8",
-      "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
-    }
-  }, feedTimeoutMs);
+  let lastError = null;
+  let fallbackTitle = facebookTitleFromUrl(feedUrl);
+  let fallbackDescription = "";
+  const deadline = Date.now() + facebookFeedBudgetMs;
 
-  const html = await response.text();
-  if (!response.ok) {
-    throw new Error(`O Facebook respondeu com HTTP ${response.status}.`);
+  for (const attempt of facebookFetchAttempts(feedUrl)) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 800) {
+      break;
+    }
+
+    try {
+      const response = await fetchWithTimeout(attempt.url, {
+        headers: attempt.headers
+      }, Math.min(facebookFeedTimeoutMs, remainingMs));
+
+      const html = await response.text();
+      if (!response.ok) {
+        lastError = new Error(`O Facebook respondeu com HTTP ${response.status}.`);
+        continue;
+      }
+
+      fallbackTitle = facebookPageTitle(extractMetaContent(html, "og:title"), feedUrl) || fallbackTitle;
+      fallbackDescription = extractMetaContent(html, "og:description") || fallbackDescription;
+
+      const posts = parseFacebookPagePosts(html, feedUrl);
+      if (!posts.length) {
+        lastError = new Error("O Facebook respondeu sem publicações acessíveis neste momento.");
+        continue;
+      }
+
+      const body = facebookPostsToRss({
+        title: fallbackTitle,
+        link: feedUrl,
+        description: fallbackDescription,
+        posts
+      });
+
+      return {
+        body,
+        contentType: "application/rss+xml; charset=utf-8",
+        createdAt: Date.now(),
+        status: response.status
+      };
+    } catch (error) {
+      lastError = error;
+    }
   }
 
-  const pageTitle = facebookPageTitle(extractMetaContent(html, "og:title"), feedUrl);
-  const posts = parseFacebookPagePosts(html, feedUrl);
-  const body = facebookPostsToRss({
-    title: pageTitle,
-    link: feedUrl,
-    description: extractMetaContent(html, "og:description") || "",
-    posts
-  });
+  throw lastError || new Error("O Facebook respondeu sem publicações acessíveis neste momento.");
+}
 
-  return {
-    body,
-    contentType: "application/rss+xml; charset=utf-8",
-    createdAt: Date.now(),
-    status: response.status
+function facebookFetchAttempts(feedUrl) {
+  const baseHeaders = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8",
+    "Referer": "https://www.facebook.com/"
   };
+  const externalHit = "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)";
+  const googleBot = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
+
+  return [
+    { url: toMbasicFacebookUrl(feedUrl), agent: externalHit },
+    { url: toMbasicFacebookUrl(feedUrl), agent: googleBot },
+    { url: toWwwFacebookUrl(feedUrl), agent: externalHit },
+    { url: facebookUrlWithLocale(feedUrl), agent: externalHit }
+  ]
+    .filter((attempt) => attempt.url)
+    .filter((attempt, index, attempts) => (
+      attempts.findIndex((candidate) => candidate.url === attempt.url && candidate.agent === attempt.agent) === index
+    ))
+    .map((attempt) => ({
+      url: attempt.url,
+      headers: {
+        ...baseHeaders,
+        "User-Agent": attempt.agent
+      }
+    }));
 }
 
 function parseFacebookPagePosts(html, pageUrl) {
@@ -1027,6 +1078,36 @@ function toMbasicFacebookUrl(facebookUrl) {
     return parsed.toString();
   } catch {
     return "";
+  }
+}
+
+function toWwwFacebookUrl(facebookUrl) {
+  try {
+    const parsed = new URL(facebookUrl);
+    if (!/facebook\.com$/i.test(parsed.hostname)) {
+      return "";
+    }
+
+    parsed.protocol = "https:";
+    parsed.hostname = "www.facebook.com";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
+function facebookUrlWithLocale(facebookUrl) {
+  const url = toWwwFacebookUrl(facebookUrl);
+  if (!url) {
+    return "";
+  }
+
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set("locale", "pt_PT");
+    return parsed.toString();
+  } catch {
+    return url;
   }
 }
 
