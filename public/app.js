@@ -28,7 +28,7 @@ const defaultGroup = "Geral";
 const groupPrefix = "group:";
 const refreshIntervalMs = 10 * 60 * 1000;
 const settingsRefreshIntervalMs = 60 * 1000;
-const appVersion = "20260510-date-fallback-1";
+const appVersion = "20260510-date-fallback-2";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -1549,7 +1549,7 @@ function relativeTime(date) {
   const minutes = Math.max(0, Math.floor(diffMs / 60000));
 
   if (minutes < 1) {
-    return "agora";
+    return "1m";
   }
 
   if (minutes < 60) {
