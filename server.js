@@ -434,15 +434,12 @@ async function fetchFacebookPageFeed(feedUrl) {
 function parseFacebookPagePosts(html, pageUrl) {
   const postMatches = [...html.matchAll(/"post_id":"(\d+)"/g)];
   const posts = [];
-  const seen = new Set();
+  const maxScannedPosts = 240;
+  let scannedPosts = 0;
 
   for (const match of postMatches) {
+    scannedPosts += 1;
     const postId = match[1];
-    if (seen.has(postId)) {
-      continue;
-    }
-
-    seen.add(postId);
     const windowHtml = html.slice(Math.max(0, match.index - 5000), match.index + 30000);
     const message = extractFacebookMessage(windowHtml);
     const postUrl = extractFacebookPostUrl(windowHtml, pageUrl, postId);
@@ -451,7 +448,7 @@ function parseFacebookPagePosts(html, pageUrl) {
       continue;
     }
 
-    const timestamp = facebookPostTimestamp(windowHtml);
+    const timestamp = facebookPostTimestamp(windowHtml, postId);
     const interactions = parseFacebookInteractions(windowHtml);
     posts.push({
       id: postId,
@@ -465,15 +462,54 @@ function parseFacebookPagePosts(html, pageUrl) {
       comments: interactions.comments
     });
 
-    if (posts.length >= 25) {
+    if (scannedPosts >= maxScannedPosts) {
       break;
     }
   }
 
-  return posts;
+  return uniqueFacebookPosts(posts.sort((left, right) => facebookPostTime(right) - facebookPostTime(left)))
+    .slice(0, 30);
 }
 
-function facebookPostTimestamp(html) {
+function uniqueFacebookPosts(posts) {
+  const seen = new Set();
+
+  return posts.filter((post) => {
+    const descriptionKey = cleanupFacebookText(post.description).toLocaleLowerCase("pt-PT").slice(0, 240);
+    const key = descriptionKey
+      ? `${descriptionKey}|${post.image || ""}`
+      : normalizePostUrl(post.link);
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function facebookPostTime(post) {
+  const timestamp = Date.parse(post.date || "");
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function normalizePostUrl(url) {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = "";
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return String(url || "").replace(/\/$/, "");
+  }
+}
+
+function facebookPostTimestamp(html, postId = "") {
+  const nearestTimestamp = nearestParsedTimestamp(html, postId);
+  if (nearestTimestamp) {
+    return nearestTimestamp;
+  }
+
   const timestamp = firstParsedTimestamp(html, [
     /"creation_time"\s*:\s*(\d{9,13})/i,
     /"publish_time"\s*:\s*(\d{9,13})/i,
@@ -900,6 +936,50 @@ function firstParsedTimestamp(html, patterns) {
   }
 
   return null;
+}
+
+function nearestParsedTimestamp(html, anchorText) {
+  if (!anchorText) {
+    return null;
+  }
+
+  const anchorIndex = html.indexOf(anchorText);
+  if (anchorIndex < 0) {
+    return null;
+  }
+
+  const pattern = /(?:\\?")?(creation_time|publish_time|publishTime|created_time)(?:\\?")?\s*:\s*(\d{9,13})/gi;
+  let best = null;
+  let match;
+
+  while ((match = pattern.exec(html))) {
+    const timestamp = normalizeTimestamp(match[2]);
+    if (!timestamp) {
+      continue;
+    }
+
+    const distance = Math.abs(match.index - anchorIndex);
+    if (!best || distance < best.distance) {
+      best = { timestamp, distance };
+    }
+  }
+
+  return best?.timestamp || null;
+}
+
+function normalizeTimestamp(value) {
+  let timestamp = Number(value);
+  if (!Number.isFinite(timestamp)) {
+    return null;
+  }
+
+  if (timestamp > 1000000000000) {
+    timestamp = Math.floor(timestamp / 1000);
+  }
+
+  const earliestAccepted = Date.UTC(2005, 0, 1) / 1000;
+  const latestAccepted = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60);
+  return timestamp >= earliestAccepted && timestamp <= latestAccepted ? timestamp : null;
 }
 
 function parseLocalizedNumber(value) {
