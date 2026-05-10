@@ -444,9 +444,9 @@ select:focus {
 .top-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 60px;
-  padding: 0 16px;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow);
@@ -461,17 +461,26 @@ select:focus {
 }
 
 .icon-button.large {
-  width: 60px;
-  height: 60px;
+  width: 46px;
+  height: 46px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow);
 }
 
 .top-actions .icon-button.large {
-  width: 42px;
-  height: 42px;
+  width: 32px;
+  height: 32px;
   background: transparent;
   box-shadow: none;
+}
+
+#menu-button .icon-menu {
+  transform: scale(0.62);
+}
+
+.top-actions .icon-search,
+.top-actions .icon-check {
+  transform: scale(0.64);
 }
 
 .icon-button.small {
@@ -1260,9 +1269,9 @@ h2 {
   }
 
   .top-actions {
-    gap: 10px;
-    min-height: 58px;
-    padding: 0 14px;
+    gap: 7px;
+    min-height: 42px;
+    padding: 0 9px;
   }
 
   .toolbar {
@@ -1289,13 +1298,13 @@ h2 {
   }
 
   .icon-button.large {
-    width: 56px;
-    height: 56px;
+    width: 42px;
+    height: 42px;
   }
 
   .top-actions .icon-button.large {
-    width: 40px;
-    height: 40px;
+    width: 30px;
+    height: 30px;
   }
 
   .item-card {
