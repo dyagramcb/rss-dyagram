@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "start": "node server.js",
+    "build": "node --check server.js && node --check public/app.js && node --check public/sw.js && node --check netlify/functions/api.js"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "name": "Rss Dyagram",
+  "short_name": "Rss Dyagram",
+  "description": "Leitor RSS com grupos, notícias por ler e leitura de artigos.",
+  "lang": "pt-PT",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "orientation": "portrait-primary",
+  "categories": ["news", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/rss-dyagram-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/rss-dyagram-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/rss-dyagram.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Newsfeed",
+      "short_name": "Newsfeed",
+      "url": "/",
+      "icons": [
+        {
+          "src": "/icons/rss-dyagram-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}

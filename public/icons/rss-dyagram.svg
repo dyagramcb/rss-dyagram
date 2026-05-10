@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Rss Dyagram">
+  <rect width="512" height="512" rx="112" fill="#5068ff"/>
+  <circle cx="412" cy="102" r="126" fill="#ffffff" opacity="0.15"/>
+  <circle cx="116" cy="404" r="164" fill="#10111f" opacity="0.12"/>
+  <path d="M134 336a42 42 0 1 1 0 84 42 42 0 0 1 0-84Z" fill="#ffffff"/>
+  <path d="M92 244c96 0 176 80 176 176h-58c0-64-54-118-118-118v-58Z" fill="#ffffff"/>
+  <path d="M92 134c158 0 286 128 286 286h-60c0-124-102-226-226-226v-60Z" fill="#ffffff"/>
+  <path d="M306 122h70v196h-70z" fill="#ffffff"/>
+  <path d="M266 278h150l-75 88-75-88Z" fill="#ffffff"/>
+</svg>

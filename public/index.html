@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="pt-PT">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="color-scheme" content="light">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Rss Dyagram">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Rss Dyagram</title>
+    <script>
+      if (window.location.protocol === "file:") {
+        window.location.replace("http://localhost:8080/");
+      }
+    </script>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/icons/rss-dyagram.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/icons/rss-dyagram-192.png">
+    <link rel="stylesheet" href="/styles.css?v=20260510-no-feed-icons-1">
+  </head>
+  <body>
+    <div class="drawer-backdrop" id="drawer-backdrop"></div>
+    <main class="app-shell">
+      <aside class="sidebar" id="sidebar" aria-label="Menu e fontes RSS">
+        <div class="profile">
+          <div class="avatar">RD</div>
+          <div class="profile-copy">
+            <strong>Rss Dyagram</strong>
+            <span>leitor RSS</span>
+          </div>
+          <button class="icon-button close-drawer" id="close-drawer" type="button" aria-label="Fechar menu">
+            <span class="icon-close" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div class="drawer-title-row">
+          <h1>Feeds</h1>
+          <div class="drawer-actions">
+            <button class="icon-button small" type="button" id="refresh-all" aria-label="Atualizar feeds">
+              <span class="icon-sync" aria-hidden="true"></span>
+            </button>
+            <button class="icon-button small" type="button" id="reset-feeds" aria-label="Repor feeds">
+              <span class="icon-reset" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
+
+        <form class="add-feed" id="add-feed-form">
+          <label for="feed-url">Adicionar RSS</label>
+          <div class="feed-entry">
+            <input id="feed-url" name="feed-url" type="url" placeholder="https://exemplo.pt/feed" required>
+            <button type="submit" aria-label="Adicionar RSS">
+              <span class="icon-plus" aria-hidden="true"></span>
+            </button>
+          </div>
+          <input id="feed-group" name="feed-group" type="text" list="feed-groups" placeholder="Grupo (ex: Notícias)">
+          <datalist id="feed-groups"></datalist>
+        </form>
+
+        <form class="group-create" id="group-create-form">
+          <label for="new-group">Criar grupo</label>
+          <div class="feed-entry">
+            <input id="new-group" name="new-group" type="text" placeholder="Ex: Desporto local" required>
+            <button type="submit" aria-label="Criar grupo">
+              <span class="icon-plus" aria-hidden="true"></span>
+            </button>
+          </div>
+        </form>
+
+        <details class="group-manager" id="group-manager">
+          <summary>Gerir grupos e feeds</summary>
+          <div class="group-manager-list" id="group-manager-list"></div>
+        </details>
+
+        <div class="feed-list" id="feed-list"></div>
+      </aside>
+
+      <section class="content" aria-live="polite">
+        <header class="app-topbar">
+          <button class="icon-button large" id="menu-button" type="button" aria-label="Abrir menu">
+            <span class="icon-menu" aria-hidden="true"></span>
+          </button>
+          <div class="top-actions">
+            <button class="icon-button large" id="search-toggle" type="button" aria-label="Pesquisar">
+              <span class="icon-search" aria-hidden="true"></span>
+            </button>
+            <button class="icon-button large" id="install-app" type="button" aria-label="Instalar aplicação" hidden>
+              <span class="icon-install" aria-hidden="true"></span>
+            </button>
+            <button class="icon-button large" type="button" id="mark-read" aria-label="Marcar como lido">
+              <span class="icon-check" aria-hidden="true"></span>
+            </button>
+          </div>
+        </header>
+
+        <section class="feed-hero">
+          <div>
+            <h2 id="page-title">Newsfeed</h2>
+            <p id="feed-count">A carregar</p>
+          </div>
+        </section>
+
+        <div class="status" id="status">A preparar leitor...</div>
+
+        <div class="toolbar" id="search-panel">
+          <label class="search-box" for="search">
+            <span>Pesquisar</span>
+            <input id="search" type="search" placeholder="Título, texto ou fonte">
+          </label>
+          <label class="select-box" for="source-filter">
+            <span>Fonte</span>
+            <select id="source-filter"></select>
+          </label>
+        </div>
+
+        <div class="items" id="items"></div>
+      </section>
+
+      <section class="reader" id="reader" aria-hidden="true">
+        <header class="reader-topbar">
+          <button class="reader-back" id="reader-back" type="button" aria-label="Voltar ao feed">
+            <span class="icon-back" aria-hidden="true"></span>
+          </button>
+          <strong id="reader-count">0</strong>
+          <div class="reader-tools">
+            <button class="icon-button" type="button" aria-label="Ouvir">
+              <span class="icon-audio" aria-hidden="true"></span>
+            </button>
+            <button class="icon-button" type="button" aria-label="Editar nota">
+              <span class="icon-pen" aria-hidden="true"></span>
+            </button>
+          </div>
+        </header>
+
+        <article class="reader-article">
+          <h2 id="reader-title"></h2>
+          <p class="reader-meta" id="reader-meta"></p>
+          <div class="reader-metrics" id="reader-metrics" aria-label="Interações da notícia">
+            <div class="reader-metric">
+              <strong id="reader-likes">n/d</strong>
+              <span>Gostos</span>
+            </div>
+            <div class="reader-metric">
+              <strong id="reader-shares">n/d</strong>
+              <span>Partilhas</span>
+            </div>
+            <div class="reader-metric">
+              <strong id="reader-comments">n/d</strong>
+              <span>Comentários</span>
+            </div>
+          </div>
+          <p class="reader-note" id="reader-note"></p>
+          <p class="reader-translation-note" id="reader-translation-note"></p>
+          <img class="reader-image" id="reader-image" alt="" decoding="async">
+          <div class="reader-body" id="reader-body"></div>
+          <div class="reader-links">
+            <a class="reader-source" id="reader-source" target="_blank" rel="noopener">Abrir notícia original</a>
+            <a class="reader-source secondary" id="reader-facebook" target="_blank" rel="noopener" hidden>Ver no Facebook</a>
+          </div>
+        </article>
+
+        <nav class="reader-actions" aria-label="Ações da notícia">
+          <button type="button"><span class="icon-share" aria-hidden="true"></span><strong>Share</strong></button>
+          <button type="button" id="reader-unread"><span class="icon-circle" aria-hidden="true"></span><strong id="reader-unread-label">Unread</strong></button>
+          <button type="button" id="reader-translate"><span class="icon-translate" aria-hidden="true"></span><strong id="reader-translate-label">Traduzir</strong></button>
+          <button type="button"><span class="icon-bookmark-small" aria-hidden="true"></span><strong>Read later</strong></button>
+          <button type="button"><span class="icon-tag" aria-hidden="true"></span><strong>Tag</strong></button>
+        </nav>
+      </section>
+    </main>
+
+    <script src="/app.js?v=20260510-synced-feeds-2"></script>
+  </body>
+</html>
