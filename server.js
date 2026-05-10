@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 let getBlobStore = null;
+let settingsStoreFactory = null;
 
 try {
   ({ getStore: getBlobStore } = require("@netlify/blobs"));
@@ -94,16 +95,24 @@ async function writeSharedSettings(payload) {
 }
 
 function canUseBlobSettings() {
-  return Boolean(getBlobStore && (
+  return Boolean(settingsStoreFactory || (getBlobStore && (
     process.env.NETLIFY ||
     process.env.NETLIFY_SITE_ID ||
     process.env.AWS_LAMBDA_FUNCTION_NAME ||
     process.env.CONTEXT
-  ));
+  )));
 }
 
 function getSettingsStore() {
+  if (settingsStoreFactory) {
+    return settingsStoreFactory();
+  }
+
   return getBlobStore("rss-dyagram");
+}
+
+function setSettingsStoreFactory(factory) {
+  settingsStoreFactory = typeof factory === "function" ? factory : null;
 }
 
 function emptySettings() {
@@ -1529,6 +1538,7 @@ module.exports = {
   fetchFeed,
   fetchImage,
   readSharedSettings,
+  setSettingsStoreFactory,
   translateToPortuguese,
   writeSharedSettings
 };

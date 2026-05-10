@@ -1,3 +1,8 @@
+const { getStore } = require("@netlify/blobs");
+const api = require("../../server");
+
+api.setSettingsStoreFactory(() => getStore("rss-dyagram"));
+
 const {
   discoverFeed,
   fetchArticle,
@@ -6,7 +11,7 @@ const {
   readSharedSettings,
   translateToPortuguese,
   writeSharedSettings
-} = require("../../server");
+} = api;
 
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
