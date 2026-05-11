@@ -1,9 +1,9 @@
-const cacheName = "rss-dyagram-pwa-20260510-19";
+const cacheName = "rss-dyagram-pwa-20260511-20";
 const shellAssets = [
   "/",
   "/index.html",
   "/styles.css?v=20260510-smaller-top-icons-1",
-  "/app.js?v=20260510-paced-facebook-refresh-1",
+  "/app.js?v=20260511-fast-cache-1",
   "/manifest.webmanifest",
   "/icons/rss-dyagram-192.png",
   "/icons/rss-dyagram-512.png",
@@ -36,7 +36,16 @@ self.addEventListener("fetch", (event) => {
   }
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) {
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/rss") || url.pathname.startsWith("/api/article")) {
+    event.respondWith(apiNetworkFirst(request));
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/")) {
     return;
   }
 
@@ -72,5 +81,28 @@ async function networkFirst(request, fallbackUrl) {
     return response;
   } catch {
     return caches.match(fallbackUrl) || caches.match("/index.html");
+  }
+}
+
+async function apiNetworkFirst(request) {
+  const cache = await caches.open(cacheName);
+
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      cache.put(request, response.clone());
+      return response;
+    }
+
+    return await caches.match(request) || response;
+  } catch {
+    return await caches.match(request) || new Response(JSON.stringify({
+      error: "Sem ligação e sem cache guardada para este pedido."
+    }), {
+      status: 503,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8"
+      }
+    });
   }
 }

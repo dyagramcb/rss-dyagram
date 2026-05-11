@@ -24,13 +24,15 @@ const defaultFeeds = [
 const storageKey = "rss-reader-feeds";
 const groupStorageKey = "rss-reader-groups";
 const readStorageKey = "rss-reader-read-ids";
+const itemStorageKey = "rss-reader-items-cache";
 const defaultGroup = "Geral";
 const groupPrefix = "group:";
 const refreshIntervalMs = 10 * 60 * 1000;
 const settingsRefreshIntervalMs = 60 * 1000;
 const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
-const appVersion = "20260510-scoped-read-ids-2";
+const itemCacheLimit = 700;
+const appVersion = "20260511-fast-cache-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -39,7 +41,7 @@ const state = {
   expandedGroups: new Set(initialGroups.map(groupKey)),
   readIds: loadReadIds(),
   selectedUrl: "all",
-  items: [],
+  items: loadCachedItems(initialFeeds),
   loading: false,
   activeReaderId: ""
 };
@@ -53,6 +55,7 @@ let settingsSyncTimer = 0;
 let settingsSyncInFlight = false;
 let hasPendingSettingsSync = false;
 let feedRefreshInFlight = false;
+let itemCacheSaveTimer = 0;
 
 const feedList = document.querySelector("#feed-list");
 const itemsEl = document.querySelector("#items");
@@ -162,6 +165,15 @@ async function loadSharedSettings(options = {}) {
     }
     state.feeds.forEach((feed) => state.expandedGroups.add(groupKey(feed.group)));
 
+    if (settings.updatedAt && state.items.length) {
+      const sharedFeedUrls = new Set(state.feeds.map((feed) => feedUrlKey(feed.url)));
+      const previousItemCount = state.items.length;
+      state.items = state.items.filter((item) => sharedFeedUrls.has(feedUrlKey(item.feedUrl)));
+      if (state.items.length !== previousItemCount) {
+        saveItemsCache();
+      }
+    }
+
     const changed = previousFeedKey !== settingsFingerprint(state.feeds, state.groups);
     if (changed) {
       saveFeeds({ sync: false });
@@ -238,6 +250,107 @@ function loadReadIds() {
 
 function saveReadIds() {
   localStorage.setItem(readStorageKey, JSON.stringify([...state.readIds]));
+}
+
+function loadCachedItems(feeds = []) {
+  try {
+    const cached = JSON.parse(localStorage.getItem(itemStorageKey) || "{}");
+    const items = Array.isArray(cached.items) ? cached.items : [];
+    const allowedFeeds = new Set(feeds.map((feed) => feedUrlKey(feed.url)));
+
+    return uniqueItems(items
+      .map(normalizeCachedItem)
+      .filter((item) => item.id && item.feedUrl && (!allowedFeeds.size || allowedFeeds.has(feedUrlKey(item.feedUrl)))))
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, itemCacheLimit);
+  } catch {
+    return [];
+  }
+}
+
+function normalizeCachedItem(item) {
+  const timestamp = Number(item.timestamp) || parseFeedDate(item.date)?.getTime() || 0;
+
+  return {
+    id: String(item.id || item.link || `${item.feedUrl || ""}-${item.title || ""}`).trim(),
+    feedName: String(item.feedName || "RSS").trim() || "RSS",
+    feedUrl: String(item.feedUrl || "").trim(),
+    feedGroup: normalizeGroup(item.feedGroup),
+    title: String(item.title || "Sem título").trim() || "Sem título",
+    description: String(item.description || "").trim(),
+    fullText: String(item.fullText || "").trim(),
+    link: String(item.link || item.feedUrl || "").trim(),
+    image: String(item.image || "").trim(),
+    date: item.date || (timestamp ? new Date(timestamp).toISOString() : ""),
+    timestamp,
+    interactions: item.interactions || emptyItemInteractions(),
+    articleLoaded: Boolean(item.articleLoaded),
+    articleLoading: false,
+    articleError: "",
+    imageHydrating: false,
+    imageHydrated: Boolean(item.image) || Boolean(item.imageHydrated),
+    facebookUrl: String(item.facebookUrl || ""),
+    articleImages: Array.isArray(item.articleImages) ? item.articleImages : [],
+    shareTargets: Array.isArray(item.shareTargets) ? item.shareTargets : [],
+    interactionsMessage: String(item.interactionsMessage || ""),
+    translation: null,
+    translationLoading: false,
+    translationError: "",
+    showTranslation: false
+  };
+}
+
+function queueItemsCacheSave() {
+  if (itemCacheSaveTimer) {
+    return;
+  }
+
+  itemCacheSaveTimer = window.setTimeout(() => {
+    itemCacheSaveTimer = 0;
+    saveItemsCache();
+  }, 250);
+}
+
+function saveItemsCache() {
+  const limits = [itemCacheLimit, 450, 250, 100];
+
+  for (const limit of limits) {
+    try {
+      localStorage.setItem(itemStorageKey, JSON.stringify({
+        version: appVersion,
+        updatedAt: new Date().toISOString(),
+        items: state.items.slice(0, limit).map(cacheableItem)
+      }));
+      return true;
+    } catch {
+      // Try a smaller cache if the browser quota is tight.
+    }
+  }
+
+  return false;
+}
+
+function cacheableItem(item) {
+  return {
+    id: item.id,
+    feedName: item.feedName,
+    feedUrl: item.feedUrl,
+    feedGroup: item.feedGroup,
+    title: trimText(item.title || "", 320),
+    description: trimText(item.description || "", 520),
+    fullText: trimText(item.fullText || "", 4500),
+    link: item.link,
+    image: item.image,
+    date: item.date,
+    timestamp: item.timestamp,
+    interactions: item.interactions || emptyItemInteractions(),
+    articleLoaded: Boolean(item.articleLoaded),
+    imageHydrated: Boolean(item.imageHydrated || item.image),
+    facebookUrl: item.facebookUrl || "",
+    articleImages: Array.isArray(item.articleImages) ? item.articleImages.slice(0, 6) : [],
+    shareTargets: Array.isArray(item.shareTargets) ? item.shareTargets.slice(0, 8) : [],
+    interactionsMessage: item.interactionsMessage || ""
+  };
 }
 
 function uniqueFeeds(feeds) {
@@ -387,7 +500,6 @@ async function loadAllFeeds() {
 
   feedRefreshInFlight = true;
   const previousItems = state.items;
-  const previousItemKeys = new Set(previousItems.map(itemKey));
   state.loading = true;
   state.feeds = managedFeeds();
   renderSources();
@@ -429,9 +541,17 @@ async function loadAllFeeds() {
     };
 
     await runLimited(regularFeedJobs, regularFeedRefreshConcurrency, loadFeedJob);
+    let errors = applyFeedResults(feedsToLoad, results, previousItems, {
+      maxHydrateItems: 12,
+      syncSettings: false
+    });
 
     for (let index = 0; index < facebookFeedJobs.length; index += 1) {
       await loadFeedJob(facebookFeedJobs[index]);
+      errors = applyFeedResults(feedsToLoad, results, previousItems, {
+        maxHydrateItems: 12,
+        syncSettings: false
+      });
 
       if (index < facebookFeedJobs.length - 1) {
         setStatus(`A atualizar ${completedFeeds}/${totalFeeds} feeds... pausa curta para o Facebook`);
@@ -439,49 +559,11 @@ async function loadAllFeeds() {
       }
     }
 
-    const items = [];
-    const errors = [];
-
-    results.forEach((result, index) => {
-      const feed = feedsToLoad[index];
-      const previousFeedItems = previousItems.filter((item) => sameFeedUrl(item.feedUrl, feed.url));
-
-      if (result?.status === "fulfilled") {
-        if (isFacebookFeedUrl(feed.url) && !result.value.items.length) {
-          const message = "O Facebook devolveu o feed vazio neste momento.";
-          feed.error = message;
-          errors.push(`${feed.name}: ${message}`);
-          items.push(...previousFeedItems);
-          return;
-        }
-
-        feed.name = result.value.title || feed.name;
-        feed.lastLoaded = new Date().toISOString();
-        feed.error = "";
-        items.push(...result.value.items);
-      } else {
-        const message = result?.reason?.message || "Não foi possível ler o RSS.";
-        feed.error = message;
-        errors.push(`${feed.name}: ${message}`);
-        items.push(...previousFeedItems);
-      }
-    });
-
-    state.items = mergeKnownItemData(
-      uniqueItems(items).sort((a, b) => b.timestamp - a.timestamp),
-      previousItems
-    );
-    syncFeedsFromItems();
-    const newItems = state.items.filter((item) => !previousItemKeys.has(itemKey(item)));
-    syncMissingImages(newItems.length ? newItems : state.items, {
-      maxItems: newItems.length ? Number.POSITIVE_INFINITY : 24
-    });
-    state.feeds = uniqueFeeds(state.feeds);
-    state.groups = uniqueGroups([...state.groups, ...state.feeds.map((feed) => feed.group)]);
     state.loading = false;
-    saveFeeds();
-    saveGroups();
-    render();
+    errors = applyFeedResults(feedsToLoad, results, previousItems, {
+      maxHydrateItems: Number.POSITIVE_INFINITY,
+      syncSettings: true
+    });
 
     if (errors.length) {
       const successfulFeeds = totalFeeds - errors.length;
@@ -497,6 +579,67 @@ async function loadAllFeeds() {
     state.loading = false;
     feedRefreshInFlight = false;
   }
+}
+
+function applyFeedResults(feedsToLoad, results, previousItems, options = {}) {
+  const items = [];
+  const errors = [];
+
+  feedsToLoad.forEach((feed, index) => {
+    const result = results[index];
+    const previousFeedItems = previousItems.filter((item) => sameFeedUrl(item.feedUrl, feed.url));
+
+    if (!result) {
+      items.push(...previousFeedItems);
+      return;
+    }
+
+    if (result.status === "fulfilled") {
+      if (isFacebookFeedUrl(feed.url) && !result.value.items.length) {
+        const message = "O Facebook devolveu o feed vazio neste momento.";
+        feed.error = message;
+        errors.push(`${feed.name}: ${message}`);
+        items.push(...previousFeedItems);
+        return;
+      }
+
+      feed.name = result.value.title || feed.name;
+      feed.lastLoaded = new Date().toISOString();
+      feed.error = "";
+      items.push(...result.value.items);
+      return;
+    }
+
+    const message = result.reason?.message || "Não foi possível ler o RSS.";
+    feed.error = message;
+    errors.push(`${feed.name}: ${message}`);
+    items.push(...previousFeedItems);
+  });
+
+  state.items = mergeKnownItemData(
+    uniqueItems(items).sort((a, b) => b.timestamp - a.timestamp),
+    previousItems
+  );
+  syncFeedsFromItems();
+  const previousItemKeys = new Set(previousItems.map(itemKey));
+  const newItems = state.items.filter((item) => !previousItemKeys.has(itemKey(item)));
+  syncMissingImages(newItems.length ? newItems : state.items, {
+    maxItems: newItems.length ? options.maxHydrateItems ?? 12 : Math.min(options.maxHydrateItems ?? 12, 24)
+  });
+  state.feeds = uniqueFeeds(state.feeds);
+  state.groups = uniqueGroups([...state.groups, ...state.feeds.map((feed) => feed.group)]);
+
+  if (options.syncSettings) {
+    saveFeeds();
+    saveGroups();
+  } else {
+    saveFeeds({ sync: false });
+    saveGroups({ sync: false });
+  }
+  saveItemsCache();
+  render();
+
+  return errors;
 }
 
 async function loadFeed(feed) {
@@ -728,6 +871,15 @@ function feedInteractionsOf(entry) {
   };
 }
 
+function emptyItemInteractions() {
+  return {
+    likes: null,
+    shares: null,
+    comments: null,
+    reactions: null
+  };
+}
+
 function cleanText(value) {
   const holder = document.createElement("div");
   holder.innerHTML = value;
@@ -954,6 +1106,7 @@ function deleteFeed(feedUrl) {
 
   saveReadIds();
   saveFeeds();
+  saveItemsCache();
   return feed.name;
 }
 
@@ -1097,6 +1250,7 @@ async function hydrateMissingImages(items) {
       item.imageHydrated = true;
     }
   });
+  queueItemsCacheSave();
 }
 
 function scheduleItemsRender() {
@@ -1347,6 +1501,7 @@ function renameGroup(oldName, newName) {
 
   saveGroups();
   saveFeeds();
+  saveItemsCache();
   return finalName;
 }
 
@@ -1376,6 +1531,7 @@ async function loadArticleDetails(item) {
     item.articleError = error.message || "Não foi possível ler a notícia.";
   } finally {
     item.articleLoading = false;
+    queueItemsCacheSave();
     if (state.activeReaderId === itemKey(item)) {
       renderReader(item);
     }
@@ -1781,17 +1937,23 @@ groupCreateForm.addEventListener("submit", (event) => {
   render();
 });
 
-refreshAllButton.addEventListener("click", refreshAllFeeds);
+refreshAllButton.addEventListener("click", () => {
+  refreshAllFeeds().catch((error) => {
+    setStatus(error.message || "Não foi possível atualizar os feeds.", true);
+  });
+});
 markReadButton.addEventListener("click", markFilteredItemsRead);
 
 resetFeedsButton.addEventListener("click", async () => {
   localStorage.removeItem(storageKey);
   localStorage.removeItem(groupStorageKey);
   localStorage.removeItem(readStorageKey);
+  localStorage.removeItem(itemStorageKey);
   state.feeds = loadFeeds();
   state.groups = loadGroups(state.feeds);
   state.expandedGroups = new Set(state.groups.map(groupKey));
   state.readIds = loadReadIds();
+  state.items = [];
   state.selectedUrl = "all";
   await loadAllFeeds();
 });
@@ -1851,6 +2013,7 @@ groupManagerList.addEventListener("change", (event) => {
       item.feedGroup = feed.group;
     }
   });
+  saveItemsCache();
 
   if (isGroupValue(state.selectedUrl) && !feedGroups().includes(groupFromValue(state.selectedUrl))) {
     state.selectedUrl = "all";
@@ -1974,21 +2137,41 @@ startApp();
 
 async function startApp() {
   render();
+  if (state.items.length) {
+    setStatus(`A mostrar ${state.items.length} notícias guardadas. A atualizar em fundo...`);
+  }
+
   await loadSharedSettings({ render: true });
   settingsSyncReady = true;
-  await loadAllFeeds();
-  window.setInterval(refreshAllFeeds, refreshIntervalMs);
-  window.setInterval(refreshSharedSettings, settingsRefreshIntervalMs);
+  loadAllFeedsInBackground();
+  window.setInterval(refreshAllFeedsInBackground, refreshIntervalMs);
+  window.setInterval(() => {
+    refreshSharedSettings().catch((error) => {
+      setStatus(error.message || "Não foi possível sincronizar as definições.", true);
+    });
+  }, settingsRefreshIntervalMs);
 }
 
 async function refreshSharedSettings() {
   const changed = await loadSharedSettings({ render: true });
   if (changed) {
-    await loadAllFeeds();
+    loadAllFeedsInBackground();
   }
 }
 
 async function refreshAllFeeds() {
   await loadSharedSettings({ render: true });
   return loadAllFeeds();
+}
+
+function loadAllFeedsInBackground() {
+  loadAllFeeds().catch((error) => {
+    setStatus(error.message || "Não foi possível atualizar os feeds.", true);
+  });
+}
+
+function refreshAllFeedsInBackground() {
+  refreshAllFeeds().catch((error) => {
+    setStatus(error.message || "Não foi possível atualizar os feeds.", true);
+  });
 }
