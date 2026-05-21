@@ -408,6 +408,11 @@ async function refreshCachedFeeds(options = {}) {
         itemCount: countFeedItems(updated.body)
       });
     } catch (error) {
+      await writeFeedCache(feed.url, {
+        ...(await readFeedCache(feed.url) || {}),
+        lastError: error.message || "Não foi possível atualizar o feed.",
+        lastAttemptAt: new Date().toISOString()
+      });
       errors.push({
         name: feed.name,
         url: feed.url,
@@ -445,7 +450,7 @@ function selectFeedsByScope(feeds, options = {}) {
 
 function feedCacheSortValue({ feed, cached }) {
   if (!cached?.body) {
-    return 0;
+    return Date.parse(cached?.lastAttemptAt || "") || 0;
   }
 
   return Date.parse(cached.updatedAt || cached.lastAttemptAt || "") || 1;

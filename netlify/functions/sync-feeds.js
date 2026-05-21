@@ -8,7 +8,7 @@ const handler = async () => {
   try {
     const result = await api.refreshCachedFeeds({
       maxRegular: 8,
-      maxFacebook: 1,
+      maxFacebook: 2,
       budgetMs: 9000
     });
 
@@ -34,4 +34,4 @@ const handler = async () => {
   }
 };
 
-exports.handler = schedule("*/30 * * * *", handler);
+exports.handler = schedule("*/15 * * * *", handler);
