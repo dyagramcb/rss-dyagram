@@ -1,9 +1,9 @@
-const cacheName = "rss-dyagram-pwa-20260511-20";
+const cacheName = "rss-dyagram-pwa-20260521-21";
 const shellAssets = [
   "/",
   "/index.html",
   "/styles.css?v=20260510-smaller-top-icons-1",
-  "/app.js?v=20260511-fast-cache-1",
+  "/app.js?v=20260521-central-cache-1",
   "/manifest.webmanifest",
   "/icons/rss-dyagram-192.png",
   "/icons/rss-dyagram-512.png",
@@ -40,7 +40,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.pathname.startsWith("/api/rss") || url.pathname.startsWith("/api/article")) {
+  if (url.pathname.startsWith("/api/news") || url.pathname.startsWith("/api/rss") || url.pathname.startsWith("/api/article")) {
     event.respondWith(apiNetworkFirst(request));
     return;
   }

@@ -32,7 +32,7 @@ const settingsRefreshIntervalMs = 60 * 1000;
 const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
-const appVersion = "20260511-fast-cache-1";
+const appVersion = "20260521-central-cache-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -481,6 +481,44 @@ function proxiedUrl(url) {
   return `/api/rss?url=${encodeURIComponent(url)}`;
 }
 
+function newsUrl(options = {}) {
+  const requestUrl = new URL("/api/news", window.location.origin);
+  const scope = options.scope || {};
+
+  if (scope.url) {
+    requestUrl.searchParams.set("url", scope.url);
+  }
+
+  if (scope.group) {
+    requestUrl.searchParams.set("group", scope.group);
+  }
+
+  if (options.fresh) {
+    requestUrl.searchParams.set("fresh", Date.now());
+  }
+
+  return `${requestUrl.pathname}${requestUrl.search}`;
+}
+
+function refreshCacheUrl(scope = {}) {
+  const requestUrl = new URL("/api/refresh", window.location.origin);
+
+  if (scope.url) {
+    requestUrl.searchParams.set("url", scope.url);
+  }
+
+  if (scope.group) {
+    requestUrl.searchParams.set("group", scope.group);
+  }
+
+  if (scope.force) {
+    requestUrl.searchParams.set("force", "1");
+  }
+
+  requestUrl.searchParams.set("t", Date.now());
+  return `${requestUrl.pathname}${requestUrl.search}`;
+}
+
 function discoverUrl(url) {
   return `/api/discover?url=${encodeURIComponent(url)}`;
 }
@@ -493,92 +531,104 @@ function imageUrl(url) {
   return `/api/image?url=${encodeURIComponent(url)}`;
 }
 
-async function loadAllFeeds() {
+async function loadAllFeeds(options = {}) {
   if (feedRefreshInFlight) {
     return false;
   }
 
   feedRefreshInFlight = true;
   const previousItems = state.items;
-  state.loading = true;
+  state.loading = !state.items.length;
   state.feeds = managedFeeds();
   renderSources();
-  const feedsToLoad = state.feeds;
-  const totalFeeds = feedsToLoad.length;
-
-  if (!totalFeeds) {
-    state.loading = false;
-    feedRefreshInFlight = false;
-    render();
-    setStatus("Não há feeds para atualizar.");
-    return true;
-  }
-
-  setStatus(`A atualizar 0/${totalFeeds} feeds...`);
+  setStatus(state.items.length ? "A ler cache central em fundo..." : "A carregar cache central...");
 
   try {
-    const results = new Array(totalFeeds);
-    let completedFeeds = 0;
-
-    const feedJobs = feedsToLoad.map((feed, index) => ({ feed, index }));
-    const regularFeedJobs = feedJobs.filter(({ feed }) => !isFacebookFeedUrl(feed.url));
-    const facebookFeedJobs = feedJobs.filter(({ feed }) => isFacebookFeedUrl(feed.url));
-    const loadFeedJob = async ({ feed, index }) => {
-      try {
-        results[index] = {
-          status: "fulfilled",
-          value: await loadFeed(feed)
-        };
-      } catch (error) {
-        results[index] = {
-          status: "rejected",
-          reason: error
-        };
-      } finally {
-        completedFeeds += 1;
-        setStatus(`A atualizar ${completedFeeds}/${totalFeeds} feeds...`);
-      }
-    };
-
-    await runLimited(regularFeedJobs, regularFeedRefreshConcurrency, loadFeedJob);
-    let errors = applyFeedResults(feedsToLoad, results, previousItems, {
-      maxHydrateItems: 12,
-      syncSettings: false
+    let data = await fetchNewsCache(options);
+    let errors = applyNewsPayload(data, previousItems, {
+      maxHydrateItems: options.maxHydrateItems ?? 12
     });
-
-    for (let index = 0; index < facebookFeedJobs.length; index += 1) {
-      await loadFeedJob(facebookFeedJobs[index]);
-      errors = applyFeedResults(feedsToLoad, results, previousItems, {
-        maxHydrateItems: 12,
-        syncSettings: false
-      });
-
-      if (index < facebookFeedJobs.length - 1) {
-        setStatus(`A atualizar ${completedFeeds}/${totalFeeds} feeds... pausa curta para o Facebook`);
-        await delay(facebookRefreshDelayMs);
-      }
-    }
 
     state.loading = false;
-    errors = applyFeedResults(feedsToLoad, results, previousItems, {
-      maxHydrateItems: Number.POSITIVE_INFINITY,
-      syncSettings: true
-    });
+    const missingFeeds = data.feedsData.filter((feedData) => feedData.status === "missing");
+
+    if (!state.items.length && missingFeeds.length) {
+      setStatus("A preparar cache central inicial...");
+      await refreshServerCache({});
+      data = await fetchNewsCache({ ...options, fresh: true });
+      errors = applyNewsPayload(data, previousItems, {
+        maxHydrateItems: options.maxHydrateItems ?? 12
+      });
+    }
 
     if (errors.length) {
+      const totalFeeds = data.feedsData.length;
       const successfulFeeds = totalFeeds - errors.length;
       const visibleErrors = errors.slice(0, 3).join(" | ");
       const suffix = errors.length > 3 ? ` | +${errors.length - 3} falhas` : "";
-      setStatus(`Verificados ${totalFeeds}/${totalFeeds} feeds. Atualizados ${successfulFeeds}. Falharam: ${visibleErrors}${suffix}`, true);
+      setStatus(`Cache lida: ${successfulFeeds}/${totalFeeds} feeds. Falharam: ${visibleErrors}${suffix}`, true);
       return false;
     }
 
-    setStatus(`Verificados ${totalFeeds}/${totalFeeds} feeds às ${new Date().toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}.`);
+    setStatus(`Cache lida às ${new Date().toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}.`);
     return true;
   } finally {
     state.loading = false;
     feedRefreshInFlight = false;
   }
+}
+
+async function fetchNewsCache(options = {}) {
+  const response = await fetch(newsUrl(options), {
+    cache: options.fresh ? "no-store" : "default"
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Não foi possível ler a cache central.");
+  }
+
+  return {
+    ...data,
+    feedsData: Array.isArray(data.feedsData) ? data.feedsData : []
+  };
+}
+
+function applyNewsPayload(data, previousItems, options = {}) {
+  if (Array.isArray(data.feeds) && data.feeds.length) {
+    state.feeds = uniqueFeeds(data.feeds);
+  }
+
+  if (Array.isArray(data.groups) && data.groups.length) {
+    state.groups = uniqueGroups([...data.groups, ...state.feeds.map((feed) => feed.group)]);
+  }
+
+  const feedsToLoad = data.feedsData.map((feedData) => normalizeFeed(feedData.feed));
+  const results = data.feedsData.map((feedData) => {
+    if (feedData.status !== "fulfilled" || !feedData.body) {
+      return {
+        status: "rejected",
+        reason: new Error(feedData.error || "Ainda não há cache para este feed.")
+      };
+    }
+
+    try {
+      return {
+        status: "fulfilled",
+        value: parseFeed(feedData.body, normalizeFeed(feedData.feed))
+      };
+    } catch (error) {
+      return {
+        status: "rejected",
+        reason: error
+      };
+    }
+  });
+
+  return applyFeedResults(feedsToLoad, results, previousItems, {
+    maxHydrateItems: options.maxHydrateItems ?? 12,
+    syncSettings: false
+  });
 }
 
 function applyFeedResults(feedsToLoad, results, previousItems, options = {}) {
@@ -1907,7 +1957,8 @@ addFeedForm.addEventListener("submit", async (event) => {
     feedGroupInput.value = "";
     saveFeeds();
     setStatus(`RSS encontrado: ${discovered.url}`);
-    await loadAllFeeds();
+    await refreshServerCache({ url: discovered.url, force: true });
+    await loadAllFeeds({ fresh: true });
     return;
   }
 
@@ -1921,7 +1972,8 @@ addFeedForm.addEventListener("submit", async (event) => {
   feedGroupInput.value = "";
   saveFeeds();
   setStatus(discovered.discovered ? `RSS encontrado: ${discovered.url}` : "RSS adicionado.");
-  await loadAllFeeds();
+  await refreshServerCache({ url: discovered.url, force: true });
+  await loadAllFeeds({ fresh: true });
 });
 
 groupCreateForm.addEventListener("submit", (event) => {
@@ -2144,7 +2196,7 @@ async function startApp() {
   await loadSharedSettings({ render: true });
   settingsSyncReady = true;
   loadAllFeedsInBackground();
-  window.setInterval(refreshAllFeedsInBackground, refreshIntervalMs);
+  window.setInterval(loadAllFeedsInBackground, refreshIntervalMs);
   window.setInterval(() => {
     refreshSharedSettings().catch((error) => {
       setStatus(error.message || "Não foi possível sincronizar as definições.", true);
@@ -2161,7 +2213,17 @@ async function refreshSharedSettings() {
 
 async function refreshAllFeeds() {
   await loadSharedSettings({ render: true });
-  return loadAllFeeds();
+  const scope = currentRefreshScope();
+  const result = await refreshServerCache(scope);
+  await loadAllFeeds({ fresh: true, maxHydrateItems: Number.POSITIVE_INFINITY });
+
+  const refreshed = result.refreshed?.length || 0;
+  const errors = result.errors?.length || 0;
+  const scopeLabel = scope.url || scope.group ? "vista atual" : "cache central";
+  setStatus(errors
+    ? `Atualizada ${scopeLabel}: ${refreshed} feeds. Falharam ${errors}.`
+    : `Atualizada ${scopeLabel}: ${refreshed} feeds.`);
+  return errors === 0;
 }
 
 function loadAllFeedsInBackground() {
@@ -2174,4 +2236,31 @@ function refreshAllFeedsInBackground() {
   refreshAllFeeds().catch((error) => {
     setStatus(error.message || "Não foi possível atualizar os feeds.", true);
   });
+}
+
+async function refreshServerCache(scope = {}) {
+  setStatus("A atualizar cache central...");
+  const response = await fetch(refreshCacheUrl(scope), {
+    method: "POST",
+    cache: "no-store"
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Não foi possível atualizar a cache central.");
+  }
+
+  return data;
+}
+
+function currentRefreshScope() {
+  if (state.selectedUrl === "all") {
+    return {};
+  }
+
+  if (isGroupValue(state.selectedUrl)) {
+    return { group: groupFromValue(state.selectedUrl) };
+  }
+
+  return { url: state.selectedUrl };
 }

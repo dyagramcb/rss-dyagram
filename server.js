@@ -16,11 +16,16 @@ const root = __dirname;
 const publicDir = path.join(root, "public");
 const dataDir = path.join(root, "data");
 const settingsPath = path.join(dataDir, "rss-dyagram-settings.json");
+const feedCacheDir = path.join(dataDir, "feed-cache");
 const cache = new Map();
 const cacheTtlMs = 5 * 60 * 1000;
 const feedTimeoutMs = 8 * 1000;
 const facebookFeedTimeoutMs = 8 * 1000;
 const facebookFeedBudgetMs = 9 * 1000;
+const regularFeedCacheTtlMs = 30 * 60 * 1000;
+const facebookFeedCacheTtlMs = 3 * 60 * 60 * 1000;
+const feedRefreshBudgetMs = 9 * 1000;
+const feedRefreshPauseMs = 250;
 const imageTimeoutMs = 8 * 1000;
 const articleTimeoutMs = 10 * 1000;
 const discoverTimeoutMs = 10 * 1000;
@@ -282,6 +287,251 @@ async function fetchFeed(feedUrl) {
 
   cache.set(`feed:${feedUrl}`, result);
   return result;
+}
+
+async function fetchCachedFeed(feedUrl, options = {}) {
+  const cached = await readFeedCache(feedUrl);
+  if (!options.force && isFreshFeedCache(cached, feedUrl)) {
+    return {
+      ...cached,
+      cacheStatus: "hit",
+      status: cached.status || 200
+    };
+  }
+
+  try {
+    const fresh = await fetchFeed(feedUrl);
+    const entry = await writeFeedCache(feedUrl, {
+      body: fresh.body,
+      contentType: fresh.contentType,
+      status: fresh.status || 200,
+      updatedAt: new Date().toISOString(),
+      lastError: "",
+      lastAttemptAt: new Date().toISOString()
+    });
+
+    return {
+      ...entry,
+      cacheStatus: cached?.body ? "refresh" : "miss"
+    };
+  } catch (error) {
+    if (cached?.body) {
+      await writeFeedCache(feedUrl, {
+        ...cached,
+        lastError: error.message || "Não foi possível atualizar o feed.",
+        lastAttemptAt: new Date().toISOString()
+      });
+
+      return {
+        ...cached,
+        cacheStatus: "stale",
+        stale: true,
+        lastError: error.message || cached.lastError || ""
+      };
+    }
+
+    throw error;
+  }
+}
+
+async function readCachedNews(options = {}) {
+  const settings = await readSharedSettings();
+  const feeds = selectFeedsByScope(settings.feeds, options);
+  const feedsData = await Promise.all(feeds.map(async (feed) => {
+    const cached = await readFeedCache(feed.url);
+    if (!cached?.body) {
+      return {
+        feed,
+        status: "missing",
+        body: "",
+        contentType: "",
+        updatedAt: "",
+        stale: true,
+        error: cached?.lastError || "Ainda não há cache para este feed."
+      };
+    }
+
+    return {
+      feed,
+      status: "fulfilled",
+      body: cached.body,
+      contentType: cached.contentType || "application/xml; charset=utf-8",
+      updatedAt: cached.updatedAt || "",
+      stale: !isFreshFeedCache(cached, feed.url),
+      error: cached.lastError || ""
+    };
+  }));
+
+  return {
+    feeds: settings.feeds,
+    groups: settings.groups,
+    settingsUpdatedAt: settings.updatedAt,
+    generatedAt: new Date().toISOString(),
+    feedsData
+  };
+}
+
+async function refreshCachedFeeds(options = {}) {
+  const settings = await readSharedSettings();
+  const scopedFeeds = selectFeedsByScope(settings.feeds, options);
+  const feedStates = await Promise.all(scopedFeeds.map(async (feed) => ({
+    feed,
+    cached: await readFeedCache(feed.url)
+  })));
+  const staleFeeds = feedStates
+    .filter(({ feed, cached }) => options.force || !isFreshFeedCache(cached, feed.url))
+    .sort((left, right) => feedCacheSortValue(left) - feedCacheSortValue(right));
+
+  const regularFeeds = staleFeeds
+    .filter(({ feed }) => !isFacebookPageUrl(feed.url))
+    .slice(0, options.maxRegular ?? 6);
+  const facebookFeeds = staleFeeds
+    .filter(({ feed }) => isFacebookPageUrl(feed.url))
+    .slice(0, options.maxFacebook ?? 1);
+  const selectedFeeds = [...regularFeeds, ...facebookFeeds];
+  const deadline = Date.now() + (options.budgetMs ?? feedRefreshBudgetMs);
+  const refreshed = [];
+  const errors = [];
+  const skipped = Math.max(0, staleFeeds.length - selectedFeeds.length);
+
+  for (const { feed } of selectedFeeds) {
+    if (Date.now() > deadline - 900) {
+      break;
+    }
+
+    try {
+      const updated = await fetchCachedFeed(feed.url, { force: true });
+      refreshed.push({
+        name: feed.name,
+        url: feed.url,
+        updatedAt: updated.updatedAt || new Date().toISOString(),
+        itemCount: countFeedItems(updated.body)
+      });
+    } catch (error) {
+      errors.push({
+        name: feed.name,
+        url: feed.url,
+        error: error.message || "Não foi possível atualizar o feed."
+      });
+    }
+
+    if (isFacebookPageUrl(feed.url)) {
+      await sleep(feedRefreshPauseMs);
+    }
+  }
+
+  return {
+    refreshed,
+    errors,
+    stale: staleFeeds.length,
+    skipped: skipped + Math.max(0, selectedFeeds.length - refreshed.length - errors.length),
+    scoped: scopedFeeds.length,
+    generatedAt: new Date().toISOString()
+  };
+}
+
+function selectFeedsByScope(feeds, options = {}) {
+  if (options.url) {
+    return feeds.filter((feed) => sameSettingFeedUrl(feed.url, options.url));
+  }
+
+  if (options.group) {
+    const key = normalizeSettingGroup(options.group).toLocaleLowerCase("pt-PT");
+    return feeds.filter((feed) => normalizeSettingGroup(feed.group).toLocaleLowerCase("pt-PT") === key);
+  }
+
+  return feeds;
+}
+
+function feedCacheSortValue({ feed, cached }) {
+  if (!cached?.body) {
+    return 0;
+  }
+
+  return Date.parse(cached.updatedAt || cached.lastAttemptAt || "") || 1;
+}
+
+function isFreshFeedCache(cached, feedUrl) {
+  if (!cached?.body || !cached.updatedAt) {
+    return false;
+  }
+
+  const updatedAt = Date.parse(cached.updatedAt);
+  if (!updatedAt) {
+    return false;
+  }
+
+  const ttl = isFacebookPageUrl(feedUrl) ? facebookFeedCacheTtlMs : regularFeedCacheTtlMs;
+  return Date.now() - updatedAt < ttl;
+}
+
+async function readFeedCache(feedUrl) {
+  const key = feedCacheKey(feedUrl);
+
+  if (canUseBlobSettings()) {
+    const raw = await getSettingsStore().get(key);
+    return raw ? normalizeFeedCache(JSON.parse(raw), feedUrl) : null;
+  }
+
+  try {
+    const raw = await fs.promises.readFile(path.join(feedCacheDir, `${key}.json`), "utf8");
+    return normalizeFeedCache(JSON.parse(raw), feedUrl);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+async function writeFeedCache(feedUrl, payload) {
+  const entry = normalizeFeedCache({
+    ...payload,
+    url: feedUrl,
+    storedAt: new Date().toISOString()
+  }, feedUrl);
+  const key = feedCacheKey(feedUrl);
+  const body = JSON.stringify(entry);
+
+  if (canUseBlobSettings()) {
+    await getSettingsStore().set(key, body);
+    return entry;
+  }
+
+  await fs.promises.mkdir(feedCacheDir, { recursive: true });
+  await fs.promises.writeFile(path.join(feedCacheDir, `${key}.json`), JSON.stringify(entry, null, 2));
+  return entry;
+}
+
+function normalizeFeedCache(payload = {}, feedUrl) {
+  return {
+    url: String(payload.url || feedUrl || ""),
+    body: String(payload.body || ""),
+    contentType: String(payload.contentType || "application/xml; charset=utf-8"),
+    status: Number(payload.status) || 200,
+    updatedAt: String(payload.updatedAt || ""),
+    storedAt: String(payload.storedAt || ""),
+    lastAttemptAt: String(payload.lastAttemptAt || ""),
+    lastError: String(payload.lastError || "")
+  };
+}
+
+function feedCacheKey(feedUrl) {
+  return `feed-cache/${crypto.createHash("sha1").update(String(feedUrl || "")).digest("hex")}`;
+}
+
+function countFeedItems(body) {
+  const text = String(body || "");
+  return (text.match(/<item\b/gi) || []).length + (text.match(/<entry\b/gi) || []).length;
+}
+
+function sameSettingFeedUrl(left, right) {
+  return String(left || "").replace(/\/$/, "") === String(right || "").replace(/\/$/, "");
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function discoverFeed(inputUrl) {
@@ -1645,6 +1895,31 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (requestUrl.pathname === "/api/news") {
+    try {
+      sendJson(res, 200, await readCachedNews({
+        url: requestUrl.searchParams.get("url") || "",
+        group: requestUrl.searchParams.get("group") || ""
+      }));
+    } catch (error) {
+      sendJson(res, 500, { error: error.message || "Não foi possível ler a cache de notícias." });
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/refresh") {
+    try {
+      sendJson(res, 200, await refreshCachedFeeds({
+        url: requestUrl.searchParams.get("url") || "",
+        group: requestUrl.searchParams.get("group") || "",
+        force: requestUrl.searchParams.get("force") === "1"
+      }));
+    } catch (error) {
+      sendJson(res, 500, { error: error.message || "Não foi possível atualizar a cache." });
+    }
+    return;
+  }
+
   if (requestUrl.pathname === "/api/rss") {
     const feedUrl = requestUrl.searchParams.get("url");
 
@@ -1655,7 +1930,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      const feed = await fetchFeed(parsed.toString());
+      const feed = await fetchCachedFeed(parsed.toString());
       send(res, 200, feed.body, feed.contentType);
     } catch (error) {
       sendJson(res, 502, { error: error.message || "Não foi possível ler o RSS." });
@@ -1782,10 +2057,13 @@ if (require.main === module) {
 
 module.exports = {
   discoverFeed,
+  fetchCachedFeed,
   fetchArticle,
   fetchFeed,
   fetchImage,
+  readCachedNews,
   readSharedSettings,
+  refreshCachedFeeds,
   setSettingsStoreFactory,
   translateToPortuguese,
   writeSharedSettings

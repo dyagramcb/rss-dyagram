@@ -6,9 +6,12 @@ api.setSettingsStoreFactory(() => getStore("rss-dyagram"));
 const {
   discoverFeed,
   fetchArticle,
+  fetchCachedFeed,
   fetchFeed,
   fetchImage,
+  readCachedNews,
   readSharedSettings,
+  refreshCachedFeeds,
   translateToPortuguese,
   writeSharedSettings
 } = api;
@@ -44,10 +47,35 @@ exports.handler = async (event) => {
   if (pathname === "/api/rss") {
     try {
       const feedUrl = assertHttpUrl(params.get("url"), "Indica um URL RSS válido.");
-      const feed = await fetchFeed(feedUrl);
-      return response(200, feed.body, feed.contentType);
+      const feed = await fetchCachedFeed(feedUrl, {
+        force: params.get("force") === "1"
+      });
+      return response(200, feed.body, feed.contentType, cacheHeaders(300));
     } catch (error) {
       return json(502, { error: error.message || "Não foi possível ler o RSS." });
+    }
+  }
+
+  if (pathname === "/api/news") {
+    try {
+      return json(200, await readCachedNews({
+        url: params.get("url") || "",
+        group: params.get("group") || ""
+      }), cacheHeaders(60));
+    } catch (error) {
+      return json(500, { error: error.message || "Não foi possível ler a cache de notícias." });
+    }
+  }
+
+  if (pathname === "/api/refresh") {
+    try {
+      return json(200, await refreshCachedFeeds({
+        url: params.get("url") || "",
+        group: params.get("group") || "",
+        force: params.get("force") === "1"
+      }));
+    } catch (error) {
+      return json(500, { error: error.message || "Não foi possível atualizar a cache." });
     }
   }
 
@@ -167,8 +195,8 @@ function assertHttpUrl(value, message) {
   throw new Error(message);
 }
 
-function json(statusCode, payload) {
-  return response(statusCode, JSON.stringify(payload), "application/json; charset=utf-8");
+function json(statusCode, payload, headers = {}) {
+  return response(statusCode, JSON.stringify(payload), "application/json; charset=utf-8", headers);
 }
 
 function binary(statusCode, body, contentType) {
@@ -183,13 +211,21 @@ function binary(statusCode, body, contentType) {
   };
 }
 
-function response(statusCode, body, contentType = "text/plain; charset=utf-8") {
+function response(statusCode, body, contentType = "text/plain; charset=utf-8", headers = {}) {
   return {
     statusCode,
     headers: {
       "Cache-Control": "no-store",
-      "Content-Type": contentType
+      "Content-Type": contentType,
+      ...headers
     },
     body
+  };
+}
+
+function cacheHeaders(maxAge) {
+  return {
+    "Cache-Control": `public, max-age=${maxAge}, stale-while-revalidate=${maxAge * 2}`,
+    "Netlify-CDN-Cache-Control": `public, max-age=${maxAge}, stale-while-revalidate=3600, durable`
   };
 }
