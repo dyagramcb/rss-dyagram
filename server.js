@@ -32,6 +32,13 @@ const discoverTimeoutMs = 10 * 1000;
 const translateTimeoutMs = 8 * 1000;
 const translationCacheTtlMs = 30 * 60 * 1000;
 const maxTranslationChars = 6000;
+const systemFeeds = [
+  {
+    name: "Estreias da semana",
+    url: process.env.RSS_DYAGRAM_PREMIERES_FEED || "https://rss-dyagram.netlify.app/estreias.xml",
+    group: "Cinema e séries"
+  }
+];
 const requestHeaders = {
   "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 };
@@ -134,14 +141,17 @@ function setSettingsStoreFactory(factory) {
 
 function emptySettings() {
   return {
-    feeds: [],
-    groups: [],
+    feeds: uniqueFeedsPayload(systemFeeds),
+    groups: uniqueStrings(systemFeeds.map((feed) => normalizeSettingGroup(feed.group))),
     updatedAt: ""
   };
 }
 
 function sanitizeSettings(payload = {}) {
-  const feeds = uniqueFeedsPayload(Array.isArray(payload.feeds) ? payload.feeds : []);
+  const feeds = uniqueFeedsPayload([
+    ...(Array.isArray(payload.feeds) ? payload.feeds : []),
+    ...systemFeeds
+  ]);
   const groups = uniqueStrings([
     ...(Array.isArray(payload.groups) ? payload.groups : []),
     ...feeds.map((feed) => feed.group)

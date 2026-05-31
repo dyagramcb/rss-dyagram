@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Estreias da semana</title>
+    <link>https://rss-dyagram.netlify.app/estreias.xml</link>
+    <description>Resumo semanal de estreias de cinema e streaming em Portugal.</description>
+    <language>pt-PT</language>
+    <lastBuildDate>Sun, 31 May 2026 09:00:00 +0100</lastBuildDate>
+    <item>
+      <title>Estreias da semana: rubrica preparada</title>
+      <link>https://rss-dyagram.netlify.app/estreias.xml</link>
+      <guid isPermaLink="false">estreias-2026-05-31-preparada</guid>
+      <pubDate>Sun, 31 May 2026 09:00:00 +0100</pubDate>
+      <description><![CDATA[A rubrica semanal de estreias já está pronta na plataforma. A partir do próximo ciclo automático, todos os domingos às 09:00, será publicado aqui um resumo das estreias de filmes e séries da semana anterior em cinemas e plataformas de streaming, com notas curtas em português e ligações às fontes consultadas.]]></description>
+    </item>
+  </channel>
+</rss>

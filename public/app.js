@@ -18,6 +18,11 @@ const defaultFeeds = [
     name: "PÚBLICO",
     url: "http://feeds.feedburner.com/PublicoRSS",
     group: "Cultura"
+  },
+  {
+    name: "Estreias da semana",
+    url: "https://rss-dyagram.netlify.app/estreias.xml",
+    group: "Cinema e séries"
   }
 ];
 
@@ -32,7 +37,7 @@ const settingsRefreshIntervalMs = 60 * 1000;
 const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
-const appVersion = "20260521-central-cache-1";
+const appVersion = "20260531-premieres-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
