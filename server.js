@@ -37,6 +37,11 @@ const systemFeeds = [
     name: "Estreias da semana",
     url: process.env.RSS_DYAGRAM_PREMIERES_FEED || "https://rss-dyagram.netlify.app/estreias.xml",
     group: "Cinema e séries"
+  },
+  {
+    name: "Capital Portuguesa da Cultura",
+    url: process.env.RSS_DYAGRAM_CULTURE_CAPITAL_FEED || "https://rss-dyagram.netlify.app/capital-portuguesa-cultura.xml",
+    group: "Cultura"
   }
 ];
 const requestHeaders = {

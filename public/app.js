@@ -23,6 +23,11 @@ const defaultFeeds = [
     name: "Estreias da semana",
     url: "https://rss-dyagram.netlify.app/estreias.xml",
     group: "Cinema e séries"
+  },
+  {
+    name: "Capital Portuguesa da Cultura",
+    url: "https://rss-dyagram.netlify.app/capital-portuguesa-cultura.xml",
+    group: "Cultura"
   }
 ];
 
@@ -37,7 +42,7 @@ const settingsRefreshIntervalMs = 60 * 1000;
 const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
-const appVersion = "20260531-premieres-1";
+const appVersion = "20260531-culture-capital-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {

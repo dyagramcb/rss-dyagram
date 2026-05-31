@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Capital Portuguesa da Cultura</title>
+    <link>https://rss-dyagram.netlify.app/capital-portuguesa-cultura.xml</link>
+    <description>Pesquisa diária das últimas 24h sobre notícias e informações da Capital Portuguesa da Cultura.</description>
+    <language>pt-PT</language>
+    <lastBuildDate>Sun, 31 May 2026 14:55:00 +0100</lastBuildDate>
+    <item>
+      <title>Pesquisa das últimas 24h: sem novas notícias confirmadas</title>
+      <link>https://rss-dyagram.netlify.app/capital-portuguesa-cultura.xml</link>
+      <guid isPermaLink="false">capital-portuguesa-cultura-2026-05-31</guid>
+      <pubDate>Sun, 31 May 2026 14:55:00 +0100</pubDate>
+      <category>Capital Portuguesa da Cultura</category>
+      <description><![CDATA[Pesquisa inicial concluída em 31/05/2026: não foram encontradas notícias novas, claramente publicadas nas últimas 24h, sobre a expressão “Capital Portuguesa da Cultura”. Contexto recente a acompanhar: o Governo abriu o concurso para a Capital Portuguesa da Cultura 2028, com prazo de 150 dias, dotação de 1 milhão de euros e anúncio previsto para 9 de dezembro; surgiram também notícias locais sobre possíveis candidaturas, incluindo Elvas e Barreiro. Fontes consultadas: Governo de Portugal, Rádio Elvas, New in Barreiro e pesquisa noticiosa web.]]></description>
+      <source url="https://portugal.gov.pt/gc25/comunicacao/comunicados/municipios-ja-se-podem-candidatar-a-capital-portuguesa-da-cultura-2028">Governo de Portugal</source>
+    </item>
+  </channel>
+</rss>
