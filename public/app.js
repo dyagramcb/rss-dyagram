@@ -42,7 +42,7 @@ const settingsRefreshIntervalMs = 60 * 1000;
 const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
-const appVersion = "20260531-culture-capital-1";
+const appVersion = "20260602-refresh-button-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -82,6 +82,7 @@ const newGroupInput = document.querySelector("#new-group");
 const groupManager = document.querySelector("#group-manager");
 const groupManagerList = document.querySelector("#group-manager-list");
 const refreshAllButton = document.querySelector("#refresh-all");
+const refreshTopButton = document.querySelector("#refresh-top");
 const resetFeedsButton = document.querySelector("#reset-feeds");
 const menuButton = document.querySelector("#menu-button");
 const closeDrawerButton = document.querySelector("#close-drawer");
@@ -1999,11 +2000,14 @@ groupCreateForm.addEventListener("submit", (event) => {
   render();
 });
 
-refreshAllButton.addEventListener("click", () => {
+function handleRefreshClick() {
   refreshAllFeeds().catch((error) => {
     setStatus(error.message || "Não foi possível atualizar os feeds.", true);
   });
-});
+}
+
+refreshAllButton.addEventListener("click", handleRefreshClick);
+refreshTopButton?.addEventListener("click", handleRefreshClick);
 markReadButton.addEventListener("click", markFilteredItemsRead);
 
 resetFeedsButton.addEventListener("click", async () => {

@@ -478,6 +478,7 @@ select:focus {
   transform: scale(0.62);
 }
 
+.top-actions .icon-sync,
 .top-actions .icon-search,
 .top-actions .icon-check {
   transform: scale(0.64);
