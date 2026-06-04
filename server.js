@@ -37,12 +37,10 @@ const systemFeeds = [
     name: "Estreias da semana",
     url: process.env.RSS_DYAGRAM_PREMIERES_FEED || "https://rss-dyagram.netlify.app/estreias.xml",
     group: "Cinema e séries"
-  },
-  {
-    name: "Capital Portuguesa da Cultura",
-    url: process.env.RSS_DYAGRAM_CULTURE_CAPITAL_FEED || "https://rss-dyagram.netlify.app/capital-portuguesa-cultura.xml",
-    group: "Cultura"
   }
+];
+const retiredSystemFeedUrls = [
+  "https://rss-dyagram.netlify.app/capital-portuguesa-cultura.xml"
 ];
 const requestHeaders = {
   "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -177,7 +175,7 @@ function uniqueFeedsPayload(feeds) {
 
   feeds.forEach((feed) => {
     const normalized = normalizeSettingFeed(feed);
-    if (!normalized.url || seen.has(normalized.url)) {
+    if (!normalized.url || seen.has(normalized.url) || isRetiredSystemFeedUrl(normalized.url)) {
       return;
     }
 
@@ -186,6 +184,11 @@ function uniqueFeedsPayload(feeds) {
   });
 
   return result.slice(0, 500);
+}
+
+function isRetiredSystemFeedUrl(url) {
+  const normalized = String(url || "").replace(/\/$/, "");
+  return retiredSystemFeedUrls.some((retiredUrl) => retiredUrl.replace(/\/$/, "") === normalized);
 }
 
 function normalizeSettingFeed(feed = {}) {

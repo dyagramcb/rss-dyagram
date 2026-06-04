@@ -23,12 +23,10 @@ const defaultFeeds = [
     name: "Estreias da semana",
     url: "https://rss-dyagram.netlify.app/estreias.xml",
     group: "Cinema e séries"
-  },
-  {
-    name: "Capital Portuguesa da Cultura",
-    url: "https://rss-dyagram.netlify.app/capital-portuguesa-cultura.xml",
-    group: "Cultura"
   }
+];
+const retiredFeedUrls = [
+  "https://rss-dyagram.netlify.app/capital-portuguesa-cultura.xml"
 ];
 
 const storageKey = "rss-reader-feeds";
@@ -42,7 +40,7 @@ const settingsRefreshIntervalMs = 60 * 1000;
 const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
-const appVersion = "20260602-refresh-button-1";
+const appVersion = "20260604-remove-culture-capital-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -368,13 +366,18 @@ function uniqueFeeds(feeds) {
   const seen = new Set();
   return feeds.map(normalizeFeed).filter((feed) => {
     const key = feedUrlKey(feed.url);
-    if (!key || seen.has(key)) {
+    if (!key || seen.has(key) || isRetiredFeedUrl(feed.url)) {
       return false;
     }
 
     seen.add(key);
     return true;
   });
+}
+
+function isRetiredFeedUrl(url) {
+  const key = feedUrlKey(url);
+  return retiredFeedUrls.some((retiredUrl) => feedUrlKey(retiredUrl) === key);
 }
 
 function restoreDefaultFeedGroups(feeds) {
