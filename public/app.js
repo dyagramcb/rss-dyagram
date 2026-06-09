@@ -41,7 +41,7 @@ const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
 const translationClientTimeoutMs = 45000;
-const appVersion = "20260609-feed-script-cleanup-1";
+const appVersion = "20260609-reader-compact-swipe-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -65,6 +65,7 @@ let settingsSyncInFlight = false;
 let hasPendingSettingsSync = false;
 let feedRefreshInFlight = false;
 let itemCacheSaveTimer = 0;
+let readerSwipeStart = null;
 
 const feedList = document.querySelector("#feed-list");
 const itemsEl = document.querySelector("#items");
@@ -349,8 +350,8 @@ function cacheableItem(item) {
     feedUrl: item.feedUrl,
     feedGroup: item.feedGroup,
     title: trimText(item.title || "", 320),
-    description: trimText(item.description || "", 520),
-    fullText: trimText(item.fullText || "", 4500),
+    description: trimText(cleanStoredText(item.description || ""), 520),
+    fullText: trimText(cleanStoredText(item.fullText || ""), 4500),
     link: item.link,
     image: item.image,
     date: item.date,
@@ -959,21 +960,28 @@ function cleanText(value) {
     node.insertAdjacentText("afterend", "\n");
   });
 
-  return holder.textContent
+  return cleanStoredText(holder.textContent
     .replace(/\r/g, "")
     .replace(/[ \t\f\v]+/g, " ")
     .replace(/[ \t]*\n[ \t]*/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
-    .trim();
+    .trim());
 }
 
 function cleanStoredText(value) {
-  return String(value || "")
-    .replace(/obs_ads\.queue_slot\(\{[\s\S]*?\}\);?/gi, " ")
-    .replace(/\b(?:googletag|pbjs|dataLayer)\.[\s\S]{0,1200}/gi, " ")
+  const cleaned = String(value || "")
+    .replace(/obs_ads\.queue_slot\([\s\S]*?(?:\);|\n{2,}|$)/gi, "\n\n")
+    .replace(/\b(?:googletag|pbjs|dataLayer)\.[\s\S]*?(?:;|\n{2,}|$)/gi, "\n\n")
     .replace(/\r/g, "")
     .replace(/[ \t\f\v]+/g, " ")
     .replace(/[ \t]*\n[ \t]*/g, "\n")
+    .replace(/\n{3,}/g, "\n\n");
+
+  return cleaned
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !/(obs_ads|queue_slot|web_article_middle|paywall_hide|script_id|"bidder"|"supplyType")/i.test(line))
+    .join("\n\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -1417,9 +1425,10 @@ function renderReader(item) {
     ? new Date(item.date).toLocaleString("pt-PT", { dateStyle: "short", timeStyle: "short" })
     : "sem data";
   readerMeta.textContent = `by ${item.feedName.toLowerCase()} / ${readerDate}`;
-  readerBody.textContent = translated
+  const bodyText = translated
     ? item.translation.text || item.fullText || item.description || "Sem texto disponível no RSS."
     : item.fullText || item.description || "Sem texto disponível no RSS.";
+  readerBody.textContent = cleanStoredText(bodyText) || "Sem texto disponível no RSS.";
   readerCount.textContent = formatUnreadCount(unreadCount());
   readerUnreadLabel.textContent = isRead(item) ? "Unread" : "Read";
   renderTranslationState(item);
@@ -1469,6 +1478,48 @@ function closeReader() {
   state.activeReaderId = "";
   document.body.classList.remove("reader-open");
   reader.setAttribute("aria-hidden", "true");
+}
+
+function beginReaderSwipe(event) {
+  if (!document.body.classList.contains("reader-open")) {
+    return;
+  }
+
+  if (event.pointerType === "mouse" && event.button !== 0) {
+    return;
+  }
+
+  readerSwipeStart = {
+    x: event.clientX,
+    y: event.clientY,
+    time: Date.now(),
+    pointerId: event.pointerId
+  };
+}
+
+function finishReaderSwipe(event) {
+  if (!readerSwipeStart || readerSwipeStart.pointerId !== event.pointerId) {
+    readerSwipeStart = null;
+    return;
+  }
+
+  const deltaX = event.clientX - readerSwipeStart.x;
+  const deltaY = event.clientY - readerSwipeStart.y;
+  const elapsed = Date.now() - readerSwipeStart.time;
+  readerSwipeStart = null;
+
+  if (
+    deltaX > 72
+    && Math.abs(deltaY) < 90
+    && deltaX > Math.abs(deltaY) * 1.35
+    && elapsed < 1200
+  ) {
+    closeReader();
+  }
+}
+
+function cancelReaderSwipe() {
+  readerSwipeStart = null;
 }
 
 function isRead(item) {
@@ -1656,8 +1707,9 @@ async function fetchArticleDetails(url) {
 }
 
 function mergeArticleDetails(item, data) {
-  if (data.text && data.text.length > (item.fullText || "").length) {
-    item.fullText = data.text;
+  const articleText = cleanStoredText(data.text || "");
+  if (articleText && articleText.length > (item.fullText || "").length) {
+    item.fullText = articleText;
     if (!item.translationLoading && !item.showTranslation) {
       clearTranslation(item);
     }
@@ -1872,7 +1924,7 @@ function cancelActiveTranslation() {
 }
 
 function translationSourceText(item) {
-  return (item.fullText || item.description || "").trim();
+  return cleanStoredText(item.fullText || item.description || "");
 }
 
 function mergeInteractions(current = {}, incoming = {}) {
@@ -2172,6 +2224,9 @@ menuButton.addEventListener("click", openDrawer);
 closeDrawerButton.addEventListener("click", closeDrawer);
 drawerBackdrop.addEventListener("click", closeDrawer);
 readerBack.addEventListener("click", closeReader);
+reader.addEventListener("pointerdown", beginReaderSwipe);
+reader.addEventListener("pointerup", finishReaderSwipe);
+reader.addEventListener("pointercancel", cancelReaderSwipe);
 readerUnreadButton.addEventListener("click", () => {
   const item = activeItem();
   if (!item) {

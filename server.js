@@ -1944,9 +1944,13 @@ function cleanupFacebookText(value) {
 
 function cleanupArticleText(text) {
   return String(text || "")
+    .replace(/obs_ads\.queue_slot\([\s\S]*?(?:\);|\n{2,}|$)/gi, "\n\n")
+    .replace(/\b(?:googletag|pbjs|dataLayer)\.[\s\S]*?(?:;|\n{2,}|$)/gi, "\n\n")
     .split("\n")
     .map((line) => line.trim())
-    .filter((line) => line && !/^VER NO FACEBOOK$/i.test(line))
+    .filter((line) => line
+      && !/^VER NO FACEBOOK$/i.test(line)
+      && !/(obs_ads|queue_slot|web_article_middle|paywall_hide|script_id|"bidder"|"supplyType")/i.test(line))
     .join("\n\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
