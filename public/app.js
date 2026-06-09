@@ -40,7 +40,8 @@ const settingsRefreshIntervalMs = 60 * 1000;
 const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
-const appVersion = "20260609-premieres-paragraphs-1";
+const translationClientTimeoutMs = 45000;
+const appVersion = "20260609-translation-fix-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -1593,6 +1594,20 @@ function markFilteredItemsRead() {
 }
 
 async function loadArticleDetails(item) {
+  if (item.articleLoadPromise) {
+    return item.articleLoadPromise;
+  }
+
+  item.articleLoadPromise = loadArticleDetailsNow(item);
+
+  try {
+    return await item.articleLoadPromise;
+  } finally {
+    item.articleLoadPromise = null;
+  }
+}
+
+async function loadArticleDetailsNow(item) {
   item.articleLoading = true;
   item.articleError = "";
 
@@ -1681,11 +1696,6 @@ async function toggleReaderTranslation() {
 }
 
 async function translateItem(item) {
-  const sourceText = translationSourceText(item);
-  if (!sourceText) {
-    return;
-  }
-
   cancelActiveTranslation();
   const requestId = translationRequestId + 1;
   translationRequestId = requestId;
@@ -1698,10 +1708,27 @@ async function translateItem(item) {
   activeTranslationController = controller;
 
   try {
+    if (!item.articleLoaded && isArticleLink(item.link)) {
+      try {
+        await loadArticleDetails(item);
+      } catch {
+        // Fall back to the RSS text below.
+      }
+    }
+
+    if (item.translationRequestId !== requestId) {
+      return;
+    }
+
+    const sourceText = translationSourceText(item);
+    if (!sourceText) {
+      throw new Error("Não há texto para traduzir.");
+    }
+
     const data = await postTranslate({
       title: item.title,
       text: sourceText
-    }, controller, 12000);
+    }, controller, translationClientTimeoutMs);
 
     if (item.translationRequestId !== requestId) {
       return;
@@ -1830,7 +1857,7 @@ function cancelActiveTranslation() {
 }
 
 function translationSourceText(item) {
-  return (item.description || item.fullText || "").trim();
+  return (item.fullText || item.description || "").trim();
 }
 
 function mergeInteractions(current = {}, incoming = {}) {
