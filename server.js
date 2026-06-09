@@ -1133,12 +1133,17 @@ async function fetchArticle(articleUrl) {
 }
 
 function parseArticle(html, articleUrl) {
-  const entryHtml = extractClassBlock(html, "entry-content") || extractClassBlock(html, "post-content") || "";
+  const structuredArticle = extractStructuredArticle(html, articleUrl);
+  const entryHtml = extractArticleHtml(html);
   const featuredHtml = extractClassBlock(html, "post-thumbnail");
   const metaImage = extractMetaImage(html, articleUrl);
-  const images = uniqueStrings([metaImage, ...extractImages(entryHtml, articleUrl)]);
-  const featuredImage = extractImages(featuredHtml, articleUrl)[0] || metaImage || images[0] || "";
-  const text = cleanupArticleText(htmlToReadableText(entryHtml));
+  const entryImages = extractImages(entryHtml, articleUrl);
+  const images = uniqueStrings([metaImage, ...structuredArticle.images, ...entryImages]);
+  const featuredImage = extractImages(featuredHtml, articleUrl)[0] || structuredArticle.images[0] || metaImage || images[0] || "";
+  const text = bestArticleText([
+    structuredArticle.text,
+    htmlToReadableText(entryHtml)
+  ]);
   const facebookUrl = extractFacebookUrl(entryHtml) || extractCanonicalFacebookUrl(html);
   const comments = extractCommentCount(html);
   const shareTargets = extractShareTargets(html);
@@ -1160,6 +1165,139 @@ function parseArticle(html, articleUrl) {
         : ""
     }
   };
+}
+
+function extractStructuredArticle(html, baseUrl) {
+  const articles = [];
+  const scriptPattern = /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
+
+  while ((match = scriptPattern.exec(html))) {
+    const payload = parseJsonPayload(match[1]);
+    if (payload) {
+      collectStructuredArticles(payload, articles, baseUrl);
+    }
+  }
+
+  return articles
+    .map((article) => ({
+      text: cleanupArticleText(article.text),
+      images: uniqueStrings(article.images)
+    }))
+    .filter((article) => article.text || article.images.length)
+    .sort((a, b) => b.text.length - a.text.length)[0] || { text: "", images: [] };
+}
+
+function parseJsonPayload(raw) {
+  const cleaned = String(raw || "")
+    .trim()
+    .replace(/^<!--\s*/, "")
+    .replace(/\s*-->$/, "");
+
+  if (!cleaned) {
+    return null;
+  }
+
+  for (const candidate of [cleaned, decodeHtmlEntities(cleaned)]) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Try the next representation.
+    }
+  }
+
+  return null;
+}
+
+function collectStructuredArticles(value, articles, baseUrl, depth = 0) {
+  if (!value || depth > 8) {
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((entry) => collectStructuredArticles(entry, articles, baseUrl, depth + 1));
+    return;
+  }
+
+  if (typeof value !== "object") {
+    return;
+  }
+
+  const type = Array.isArray(value["@type"]) ? value["@type"].join(" ") : String(value["@type"] || "");
+  const articleLike = /(?:^|\b)(NewsArticle|Article|BlogPosting|ReportageNewsArticle|Review)(?:\b|$)/i.test(type);
+  const text = [value.articleBody, value.text]
+    .map((entry) => structuredTextValue(entry))
+    .filter(Boolean)
+    .join("\n\n");
+
+  if ((articleLike || value.articleBody) && text) {
+    articles.push({
+      text,
+      images: structuredImageValues(value, baseUrl)
+    });
+  }
+
+  Object.entries(value).forEach(([key, child]) => {
+    if (["author", "publisher", "image", "thumbnail", "thumbnailUrl"].includes(key)) {
+      return;
+    }
+
+    if (child && (Array.isArray(child) || typeof child === "object")) {
+      collectStructuredArticles(child, articles, baseUrl, depth + 1);
+    }
+  });
+}
+
+function structuredTextValue(value) {
+  if (typeof value === "string") {
+    return decodeHtmlEntities(value).trim();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => structuredTextValue(entry)).filter(Boolean).join("\n\n");
+  }
+
+  if (value && typeof value === "object") {
+    return structuredTextValue(value.text || value.value || "");
+  }
+
+  return "";
+}
+
+function structuredImageValues(value, baseUrl) {
+  const rawImages = [
+    ...flattenImageValue(value.image),
+    ...flattenImageValue(value.thumbnail),
+    ...flattenImageValue(value.thumbnailUrl)
+  ];
+
+  return uniqueStrings(rawImages
+    .map((url) => toAbsoluteUrl(String(url || "").trim(), baseUrl))
+    .filter(isUsableImageUrl));
+}
+
+function flattenImageValue(value) {
+  if (!value) {
+    return [];
+  }
+
+  if (typeof value === "string") {
+    return [decodeHtmlEntities(value)];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => flattenImageValue(entry));
+  }
+
+  if (typeof value === "object") {
+    return [
+      ...flattenImageValue(value.url),
+      ...flattenImageValue(value.contentUrl),
+      ...flattenImageValue(value["@id"])
+    ];
+  }
+
+  return [];
 }
 
 async function fetchFacebookInteractions(facebookUrl) {
@@ -1415,6 +1553,84 @@ function extractClassBlock(html, className) {
   }
 
   return html.slice(openTag.index);
+}
+
+function extractArticleHtml(html) {
+  const classNames = [
+    "entry-content",
+    "post-content",
+    "article-content",
+    "article__content",
+    "article-body",
+    "article__body",
+    "articleBody",
+    "body__container",
+    "story-body",
+    "storyBody",
+    "content-body",
+    "post__content",
+    "single-content",
+    "td-post-content",
+    "container--body-inner",
+    "container--full-inner"
+  ];
+  const candidates = [
+    ...classNames.map((className) => extractClassBlock(html, className)),
+    ...extractTagBlocks(html, "article")
+  ].filter(Boolean);
+
+  return candidates
+    .map((candidate) => ({
+      html: candidate,
+      text: cleanupArticleText(htmlToReadableText(candidate))
+    }))
+    .filter((candidate) => candidate.text.length >= 80)
+    .sort((a, b) => b.text.length - a.text.length)[0]?.html || "";
+}
+
+function extractTagBlocks(html, tagName, limit = 8) {
+  const blocks = [];
+  const safeTag = escapeRegExp(tagName);
+  const openTagPattern = new RegExp(`<${safeTag}\\b[^>]*>`, "gi");
+  let openTag;
+
+  while ((openTag = openTagPattern.exec(html)) && blocks.length < limit) {
+    const tagPattern = new RegExp(`<\\/?${safeTag}\\b[^>]*>`, "gi");
+    tagPattern.lastIndex = openTag.index + openTag[0].length;
+    let depth = 1;
+    let tagMatch;
+
+    while ((tagMatch = tagPattern.exec(html))) {
+      const isClosing = /^<\//.test(tagMatch[0]);
+      const isSelfClosing = /\/>$/.test(tagMatch[0]);
+
+      if (isClosing) {
+        depth -= 1;
+      } else if (!isSelfClosing) {
+        depth += 1;
+      }
+
+      if (depth === 0) {
+        blocks.push(html.slice(openTag.index, tagPattern.lastIndex));
+        openTagPattern.lastIndex = tagPattern.lastIndex;
+        break;
+      }
+    }
+
+    if (depth > 0) {
+      blocks.push(html.slice(openTag.index));
+      break;
+    }
+  }
+
+  return blocks;
+}
+
+function bestArticleText(values) {
+  const cleaned = uniqueStrings(values.map(cleanupArticleText));
+  return cleaned.find((text) => text.length >= 160)
+    || cleaned.sort((a, b) => b.length - a.length)[0]
+    || "";
 }
 
 function extractImages(html, baseUrl) {
