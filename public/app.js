@@ -41,7 +41,7 @@ const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
 const translationClientTimeoutMs = 45000;
-const appVersion = "20260609-translation-fix-1";
+const appVersion = "20260609-feed-script-cleanup-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -280,6 +280,8 @@ function loadCachedItems(feeds = []) {
 
 function normalizeCachedItem(item) {
   const timestamp = Number(item.timestamp) || parseFeedDate(item.date)?.getTime() || 0;
+  const fullText = cleanStoredText(item.fullText || "");
+  const description = cleanStoredText(item.description || "");
 
   return {
     id: String(item.id || item.link || `${item.feedUrl || ""}-${item.title || ""}`).trim(),
@@ -287,8 +289,8 @@ function normalizeCachedItem(item) {
     feedUrl: String(item.feedUrl || "").trim(),
     feedGroup: normalizeGroup(item.feedGroup),
     title: String(item.title || "Sem título").trim() || "Sem título",
-    description: String(item.description || "").trim(),
-    fullText: String(item.fullText || "").trim(),
+    description: description || trimText(fullText, 240),
+    fullText,
     link: String(item.link || item.feedUrl || "").trim(),
     image: String(item.image || "").trim(),
     date: item.date || (timestamp ? new Date(timestamp).toISOString() : ""),
@@ -800,8 +802,9 @@ function mergeKnownItemData(items, previousItems) {
       item.image = previous.image;
     }
 
-    if (previous.fullText && previous.fullText.length > (item.fullText || "").length) {
-      item.fullText = previous.fullText;
+    const previousFullText = cleanStoredText(previous.fullText || "");
+    if (previousFullText && previousFullText.length > (item.fullText || "").length) {
+      item.fullText = previousFullText;
     }
 
     item.imageHydrating = false;
@@ -949,6 +952,7 @@ function cleanText(value) {
   const holder = document.createElement("div");
   holder.innerHTML = value;
 
+  holder.querySelectorAll("script, style, noscript, template, iframe, object, embed, form, svg").forEach((node) => node.remove());
   holder.querySelectorAll("br").forEach((node) => node.replaceWith("\n"));
   holder.querySelectorAll("h1, h2, h3, h4, h5, h6, p, div, section, article, li").forEach((node) => {
     node.insertAdjacentText("beforebegin", "\n");
@@ -956,6 +960,17 @@ function cleanText(value) {
   });
 
   return holder.textContent
+    .replace(/\r/g, "")
+    .replace(/[ \t\f\v]+/g, " ")
+    .replace(/[ \t]*\n[ \t]*/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function cleanStoredText(value) {
+  return String(value || "")
+    .replace(/obs_ads\.queue_slot\(\{[\s\S]*?\}\);?/gi, " ")
+    .replace(/\b(?:googletag|pbjs|dataLayer)\.[\s\S]{0,1200}/gi, " ")
     .replace(/\r/g, "")
     .replace(/[ \t\f\v]+/g, " ")
     .replace(/[ \t]*\n[ \t]*/g, "\n")
