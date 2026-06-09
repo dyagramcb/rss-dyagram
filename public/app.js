@@ -40,7 +40,7 @@ const settingsRefreshIntervalMs = 60 * 1000;
 const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
-const appVersion = "20260604-remove-culture-capital-1";
+const appVersion = "20260609-premieres-paragraphs-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -947,7 +947,19 @@ function emptyItemInteractions() {
 function cleanText(value) {
   const holder = document.createElement("div");
   holder.innerHTML = value;
-  return holder.textContent.replace(/\s+/g, " ").trim();
+
+  holder.querySelectorAll("br").forEach((node) => node.replaceWith("\n"));
+  holder.querySelectorAll("h1, h2, h3, h4, h5, h6, p, div, section, article, li").forEach((node) => {
+    node.insertAdjacentText("beforebegin", "\n");
+    node.insertAdjacentText("afterend", "\n");
+  });
+
+  return holder.textContent
+    .replace(/\r/g, "")
+    .replace(/[ \t\f\v]+/g, " ")
+    .replace(/[ \t]*\n[ \t]*/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function decodeHtml(value) {
