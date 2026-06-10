@@ -41,13 +41,13 @@ const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
 const translationClientTimeoutMs = 45000;
-const appVersion = "20260610-rss-fallback-parser-1";
+const appVersion = "20260610-collapsed-groups-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
   feeds: initialFeeds,
   groups: initialGroups,
-  expandedGroups: new Set(initialGroups.map(groupKey)),
+  expandedGroups: new Set(),
   readIds: loadReadIds(),
   selectedUrl: "all",
   items: loadCachedItems(initialFeeds),
@@ -174,8 +174,6 @@ async function loadSharedSettings(options = {}) {
         ...state.feeds.map((feed) => feed.group)
       ]);
     }
-    state.feeds.forEach((feed) => state.expandedGroups.add(groupKey(feed.group)));
-
     if (settings.updatedAt && state.items.length) {
       const sharedFeedUrls = new Set(state.feeds.map((feed) => feedUrlKey(feed.url)));
       const previousItemCount = state.items.length;
@@ -485,7 +483,6 @@ function ensureGroup(value) {
 
   state.groups.push(group);
   state.groups = uniqueGroups(state.groups);
-  state.expandedGroups.add(groupKey(group));
   saveGroups();
   return group;
 }
@@ -2230,7 +2227,6 @@ groupCreateForm.addEventListener("submit", (event) => {
 
   const existed = Boolean(matchingGroup(newGroupInput.value));
   const group = ensureGroup(newGroupInput.value);
-  state.expandedGroups.add(groupKey(group));
   newGroupInput.value = "";
   feedGroupInput.value = group;
   state.selectedUrl = groupValue(group);
@@ -2255,7 +2251,7 @@ resetFeedsButton.addEventListener("click", async () => {
   localStorage.removeItem(itemStorageKey);
   state.feeds = loadFeeds();
   state.groups = loadGroups(state.feeds);
-  state.expandedGroups = new Set(state.groups.map(groupKey));
+  state.expandedGroups = new Set();
   state.readIds = loadReadIds();
   state.items = [];
   state.selectedUrl = "all";
