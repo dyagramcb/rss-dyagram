@@ -41,7 +41,7 @@ const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
 const translationClientTimeoutMs = 45000;
-const appVersion = "20260610-focused-group-sources-1";
+const appVersion = "20260610-visible-group-headings-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -1147,10 +1147,6 @@ function renderSources() {
   const selectedGroup = selectedGroupName();
   feedsByGroup().forEach((feeds, group) => {
     if (!feeds.length) {
-      return;
-    }
-
-    if (selectedGroup && groupKey(group) !== groupKey(selectedGroup)) {
       return;
     }
 
