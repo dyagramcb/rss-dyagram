@@ -1,9 +1,9 @@
-const cacheName = "rss-dyagram-pwa-20260610-1";
+const cacheName = "rss-dyagram-pwa-20260610-2";
 const shellAssets = [
   "/",
   "/index.html",
-  "/styles.css?v=20260610-feed-cache-bypass-1",
-  "/app.js?v=20260610-feed-cache-bypass-1",
+  "/styles.css?v=20260610-news-cache-buster-1",
+  "/app.js?v=20260610-news-cache-buster-1",
   "/estreias.xml",
   "/manifest.webmanifest",
   "/icons/rss-dyagram-192.png",
@@ -95,9 +95,9 @@ async function apiNetworkFirst(request) {
       return response;
     }
 
-    return await caches.match(request) || response;
+    return await caches.match(request) || await caches.match(request, { ignoreSearch: true }) || response;
   } catch {
-    return await caches.match(request) || new Response(JSON.stringify({
+    return await caches.match(request) || await caches.match(request, { ignoreSearch: true }) || new Response(JSON.stringify({
       error: "Sem ligação e sem cache guardada para este pedido."
     }), {
       status: 503,

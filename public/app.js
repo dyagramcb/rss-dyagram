@@ -41,7 +41,7 @@ const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
 const translationClientTimeoutMs = 45000;
-const appVersion = "20260610-feed-cache-bypass-1";
+const appVersion = "20260610-news-cache-buster-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -511,9 +511,7 @@ function newsUrl(options = {}) {
     requestUrl.searchParams.set("group", scope.group);
   }
 
-  if (options.fresh) {
-    requestUrl.searchParams.set("fresh", Date.now());
-  }
+  requestUrl.searchParams.set("fresh", Date.now());
 
   return `${requestUrl.pathname}${requestUrl.search}`;
 }
