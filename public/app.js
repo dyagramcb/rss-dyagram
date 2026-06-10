@@ -41,7 +41,7 @@ const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
 const translationClientTimeoutMs = 45000;
-const appVersion = "20260610-visible-group-headings-1";
+const appVersion = "20260610-normalized-group-filter-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -1193,6 +1193,11 @@ function sourceButton(feed, options = {}) {
 
   button.addEventListener("click", () => {
     state.selectedUrl = feed.url;
+    if (feed.url === "all") {
+      state.expandedGroups.clear();
+    } else {
+      state.expandedGroups = new Set([groupKey(feed.group)]);
+    }
     render();
     closeDrawer();
   });
@@ -1217,8 +1222,8 @@ function groupButton(group, feeds, expanded) {
   `;
 
   button.addEventListener("click", () => {
-    toggleGroup(group);
     state.selectedUrl = groupValue(group);
+    state.expandedGroups = new Set([groupKey(group)]);
     render();
   });
 
@@ -1690,7 +1695,7 @@ function sourceMatchesSelection(item) {
   }
 
   if (isGroupValue(state.selectedUrl)) {
-    return item.feedGroup === groupFromValue(state.selectedUrl);
+    return groupKey(item.feedGroup) === groupKey(groupFromValue(state.selectedUrl));
   }
 
   return sameFeedUrl(item.feedUrl, state.selectedUrl);

@@ -1,9 +1,9 @@
-const cacheName = "rss-dyagram-pwa-20260610-6";
+const cacheName = "rss-dyagram-pwa-20260610-7";
 const shellAssets = [
   "/",
   "/index.html",
-  "/styles.css?v=20260610-visible-group-headings-1",
-  "/app.js?v=20260610-visible-group-headings-1",
+  "/styles.css?v=20260610-normalized-group-filter-1",
+  "/app.js?v=20260610-normalized-group-filter-1",
   "/estreias.xml",
   "/manifest.webmanifest",
   "/icons/rss-dyagram-192.png",
