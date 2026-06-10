@@ -41,7 +41,7 @@ const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
 const translationClientTimeoutMs = 45000;
-const appVersion = "20260610-normalized-group-filter-1";
+const appVersion = "20260610-html-entities-fix-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -1095,13 +1095,13 @@ function cleanText(value) {
 }
 
 function cleanStoredText(value) {
-  const cleaned = String(value || "")
+  const cleaned = decodeStoredEntities(String(value || "")
     .replace(/obs_ads\.queue_slot\([\s\S]*?(?:\);|\n{2,}|$)/gi, "\n\n")
     .replace(/\b(?:googletag|pbjs|dataLayer)\.[\s\S]*?(?:;|\n{2,}|$)/gi, "\n\n")
     .replace(/\r/g, "")
     .replace(/[ \t\f\v]+/g, " ")
     .replace(/[ \t]*\n[ \t]*/g, "\n")
-    .replace(/\n{3,}/g, "\n\n");
+    .replace(/\n{3,}/g, "\n\n"));
 
   return cleaned
     .split("\n")
@@ -1110,6 +1110,21 @@ function cleanStoredText(value) {
     .join("\n\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function decodeStoredEntities(value) {
+  let current = String(value || "");
+
+  for (let index = 0; index < 3; index += 1) {
+    const decoded = decodeHtml(current);
+    if (decoded === current) {
+      break;
+    }
+
+    current = decoded;
+  }
+
+  return current;
 }
 
 function decodeHtml(value) {

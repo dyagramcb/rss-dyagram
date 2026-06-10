@@ -1943,7 +1943,7 @@ function cleanupFacebookText(value) {
 }
 
 function cleanupArticleText(text) {
-  return String(text || "")
+  return decodeHtmlEntities(String(text || ""))
     .replace(/obs_ads\.queue_slot\([\s\S]*?(?:\);|\n{2,}|$)/gi, "\n\n")
     .replace(/\b(?:googletag|pbjs|dataLayer)\.[\s\S]*?(?:;|\n{2,}|$)/gi, "\n\n")
     .split("\n")
@@ -2028,10 +2028,51 @@ function extractLinkHref(html, expectedRel) {
 
 function decodeHtmlEntities(value) {
   const namedEntities = {
+    Aacute: "Á",
+    Acirc: "Â",
+    Agrave: "À",
+    Aring: "Å",
+    Atilde: "Ã",
+    Auml: "Ä",
+    Ccedil: "Ç",
+    Eacute: "É",
+    Ecirc: "Ê",
+    Egrave: "È",
+    Euml: "Ë",
+    Iacute: "Í",
+    Icirc: "Î",
+    Igrave: "Ì",
+    Iuml: "Ï",
+    Ntilde: "Ñ",
+    Oacute: "Ó",
+    Ocirc: "Ô",
+    Ograve: "Ò",
+    Otilde: "Õ",
+    Ouml: "Ö",
+    Uacute: "Ú",
+    Ucirc: "Û",
+    Ugrave: "Ù",
+    Uuml: "Ü",
     amp: "&",
+    aacute: "á",
+    acirc: "â",
+    agrave: "à",
+    aring: "å",
+    atilde: "ã",
+    auml: "ä",
     apos: "'",
+    ccedil: "ç",
+    eacute: "é",
+    ecirc: "ê",
+    egrave: "è",
+    eth: "ð",
+    euml: "ë",
     gt: ">",
     hellip: "...",
+    iacute: "í",
+    icirc: "î",
+    igrave: "ì",
+    iuml: "ï",
     laquo: "<<",
     ldquo: "\"",
     lsquo: "'",
@@ -2039,16 +2080,28 @@ function decodeHtmlEntities(value) {
     mdash: "-",
     nbsp: " ",
     ndash: "-",
+    ntilde: "ñ",
+    oacute: "ó",
+    ocirc: "ô",
+    ograve: "ò",
+    otilde: "õ",
+    ouml: "ö",
     quot: "\"",
     raquo: ">>",
     rdquo: "\"",
-    rsquo: "'"
+    rsquo: "'",
+    uacute: "ú",
+    ucirc: "û",
+    ugrave: "ù",
+    uuml: "ü",
+    yacute: "ý",
+    yuml: "ÿ"
   };
 
   return String(value || "")
     .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
     .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
-    .replace(/&([a-z]+);/gi, (entity, name) => namedEntities[name.toLowerCase()] || entity);
+    .replace(/&([a-z]+);/gi, (entity, name) => namedEntities[name] || namedEntities[name.toLowerCase()] || entity);
 }
 
 function escapeXml(value) {
