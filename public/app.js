@@ -41,7 +41,7 @@ const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
 const translationClientTimeoutMs = 45000;
-const appVersion = "20260610-collapsed-groups-1";
+const appVersion = "20260610-focused-group-sources-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -1144,12 +1144,19 @@ function renderSources() {
   });
   feedList.append(allButton);
 
+  const selectedGroup = selectedGroupName();
   feedsByGroup().forEach((feeds, group) => {
     if (!feeds.length) {
       return;
     }
 
-    const expanded = isGroupExpanded(group);
+    if (selectedGroup && groupKey(group) !== groupKey(selectedGroup)) {
+      return;
+    }
+
+    const expanded = selectedGroup
+      ? groupKey(group) === groupKey(selectedGroup)
+      : isGroupExpanded(group);
     const section = document.createElement("section");
     section.className = `feed-group${expanded ? " expanded" : ""}`;
     section.append(groupButton(group, feeds, expanded));
@@ -1158,6 +1165,15 @@ function renderSources() {
     }
     feedList.append(section);
   });
+}
+
+function selectedGroupName() {
+  if (isGroupValue(state.selectedUrl)) {
+    return matchingGroup(groupFromValue(state.selectedUrl)) || groupFromValue(state.selectedUrl);
+  }
+
+  const selectedFeed = state.feeds.find((feed) => sameFeedUrl(feed.url, state.selectedUrl));
+  return selectedFeed ? selectedFeed.group : "";
 }
 
 function sourceButton(feed, options = {}) {
