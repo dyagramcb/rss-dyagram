@@ -41,7 +41,7 @@ const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
 const translationClientTimeoutMs = 45000;
-const appVersion = "20260610-news-cache-buster-1";
+const appVersion = "20260610-rss-fallback-parser-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -826,7 +826,7 @@ function parseFeed(xmlText, feed) {
   const documentXml = new DOMParser().parseFromString(xmlText, "application/xml");
 
   if (documentXml.querySelector("parsererror")) {
-    throw new Error("A resposta não parece ser RSS/Atom válido.");
+    return parseFeedTextFallback(xmlText, feed);
   }
 
   const channel = documentXml.querySelector("channel");
@@ -837,6 +837,63 @@ function parseFeed(xmlText, feed) {
   const items = entries.map((entry) => parseItem(entry, feed, title)).filter(Boolean);
 
   return { title, items };
+}
+
+function parseFeedTextFallback(xmlText, feed) {
+  const channelBlock = firstTagBlock(xmlText, "channel") || xmlText;
+  const title = cleanText(xmlTagText(channelBlock, "title")) || feed.name;
+  const rssItems = tagBlocks(xmlText, "item");
+  const atomItems = rssItems.length ? [] : tagBlocks(xmlText, "entry");
+  const entries = rssItems.length ? rssItems : atomItems;
+
+  if (!entries.length) {
+    throw new Error("A resposta não parece ser RSS/Atom válido.");
+  }
+
+  return {
+    title,
+    items: entries.map((entry) => parseTextItem(entry, feed, title)).filter(Boolean)
+  };
+}
+
+function parseTextItem(entryText, feed, feedTitle) {
+  const title = xmlTagText(entryText, "title") || "Sem título";
+  const description = xmlTagText(entryText, "description")
+    || xmlTagText(entryText, "summary")
+    || xmlTagText(entryText, "content")
+    || xmlTagText(entryText, "content:encoded")
+    || "";
+  const link = xmlLinkText(entryText) || feed.url;
+  const dateText = xmlTagText(entryText, "pubDate") || xmlTagText(entryText, "updated") || xmlTagText(entryText, "published") || "";
+  const date = parseFeedDate(dateText);
+  const image = xmlImageOf(entryText, description);
+  const id = xmlTagText(entryText, "guid") || xmlTagText(entryText, "id") || link || `${feed.url}-${title}`;
+  const fullText = cleanText(description);
+
+  return {
+    id,
+    feedName: feedTitle || feed.name,
+    feedUrl: feed.url,
+    feedGroup: normalizeGroup(feed.group),
+    title: cleanText(title),
+    description: trimText(fullText, 240),
+    fullText,
+    link,
+    image,
+    date: date ? date.toISOString() : "",
+    timestamp: date ? date.getTime() : 0,
+    interactions: xmlInteractionsOf(entryText),
+    articleLoaded: false,
+    articleLoading: false,
+    articleError: "",
+    imageHydrating: false,
+    imageHydrated: Boolean(image),
+    facebookUrl: "",
+    translation: null,
+    translationLoading: false,
+    translationError: "",
+    showTranslation: false
+  };
 }
 
 function parseItem(entry, feed, feedTitle) {
@@ -936,6 +993,80 @@ function feedInteractionsOf(entry) {
     comments,
     reactions: likes
   };
+}
+
+function xmlInteractionsOf(entryText) {
+  const likes = numberOrNull(xmlTagText(entryText, "likes"));
+  const shares = numberOrNull(xmlTagText(entryText, "shares"));
+  const comments = numberOrNull(xmlTagText(entryText, "slash:comments") || xmlTagText(entryText, "comments"));
+
+  return {
+    likes,
+    shares,
+    comments,
+    reactions: likes
+  };
+}
+
+function firstTagBlock(xmlText, tagName) {
+  return tagBlocks(xmlText, tagName, 1)[0] || "";
+}
+
+function tagBlocks(xmlText, tagName, limit = Number.POSITIVE_INFINITY) {
+  const escapedTag = escapeRegExp(tagName);
+  const pattern = new RegExp(`<${escapedTag}\\b[^>]*>[\\s\\S]*?<\\/${escapedTag}>`, "gi");
+  const blocks = [];
+  let match;
+
+  while ((match = pattern.exec(xmlText)) && blocks.length < limit) {
+    blocks.push(match[0]);
+  }
+
+  return blocks;
+}
+
+function xmlTagText(xmlText, tagName) {
+  const escapedTag = escapeRegExp(tagName);
+  const pattern = new RegExp(`<${escapedTag}\\b[^>]*>([\\s\\S]*?)<\\/${escapedTag}>`, "i");
+  const match = pattern.exec(xmlText);
+  return match ? decodeXmlText(match[1]) : "";
+}
+
+function xmlLinkText(entryText) {
+  const linkTag = firstTagBlock(entryText, "link");
+  if (!linkTag) {
+    return "";
+  }
+
+  const href = linkTag.match(/\bhref=["']([^"']+)["']/i);
+  return href ? decodeHtml(href[1]).trim() : xmlTagText(entryText, "link");
+}
+
+function xmlImageOf(entryText, description) {
+  const enclosure = entryText.match(/<enclosure\b[^>]*\burl=["']([^"']+)["'][^>]*\btype=["'][^"']*image[^"']*["'][^>]*>/i)
+    || entryText.match(/<enclosure\b[^>]*\btype=["'][^"']*image[^"']*["'][^>]*\burl=["']([^"']+)["'][^>]*>/i);
+  if (enclosure) {
+    return decodeHtml(enclosure[1]).trim();
+  }
+
+  const media = entryText.match(/<media:(?:content|thumbnail)\b[^>]*\burl=["']([^"']+)["'][^>]*>/i);
+  if (media) {
+    return decodeHtml(media[1]).trim();
+  }
+
+  const imageMatch = description.match(/<img[^>]+src=["']([^"']+)["']/i);
+  return imageMatch ? decodeHtml(imageMatch[1]).trim() : "";
+}
+
+function decodeXmlText(value) {
+  return decodeHtml(String(value || "")
+    .replace(/<!\[CDATA\[/g, "")
+    .replace(/\]\]>/g, "")
+    .trim());
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function emptyItemInteractions() {
