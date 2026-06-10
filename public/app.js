@@ -41,7 +41,7 @@ const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
 const translationClientTimeoutMs = 45000;
-const appVersion = "20260609-reader-compact-swipe-1";
+const appVersion = "20260610-feed-cache-bypass-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -598,7 +598,7 @@ async function loadAllFeeds(options = {}) {
 
 async function fetchNewsCache(options = {}) {
   const response = await fetch(newsUrl(options), {
-    cache: options.fresh ? "no-store" : "default"
+    cache: "no-store"
   });
   const data = await response.json();
 
