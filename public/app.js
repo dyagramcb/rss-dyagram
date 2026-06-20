@@ -41,7 +41,7 @@ const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
 const translationClientTimeoutMs = 45000;
-const appVersion = "20260610-html-entities-fix-1";
+const appVersion = "20260620-hide-reader-interactions-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -103,6 +103,7 @@ const readerUnreadButton = document.querySelector("#reader-unread");
 const readerUnreadLabel = document.querySelector("#reader-unread-label");
 const readerTranslateButton = document.querySelector("#reader-translate");
 const readerTranslateLabel = document.querySelector("#reader-translate-label");
+const readerMetrics = document.querySelector("#reader-metrics");
 const readerLikes = document.querySelector("#reader-likes");
 const readerShares = document.querySelector("#reader-shares");
 const readerComments = document.querySelector("#reader-comments");
@@ -1106,10 +1107,19 @@ function cleanStoredText(value) {
   return cleaned
     .split("\n")
     .map((line) => line.trim())
-    .filter((line) => line && !/(obs_ads|queue_slot|web_article_middle|paywall_hide|script_id|"bidder"|"supplyType")/i.test(line))
+    .filter((line) => line && !isReaderActionLine(line) && !/(obs_ads|queue_slot|web_article_middle|paywall_hide|script_id|"bidder"|"supplyType")/i.test(line))
     .join("\n\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function isReaderActionLine(line) {
+  const normalized = String(line || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return /^(?:0|-->|-|Partilhar notícia|Partilhar no Facebook|Partilhar no WhatsApp|Partilhar no Messenger|Partilhar no Twitter|Partilhar no LinkedIn|Partilhar no Pinterest|Partilhar no Threads|Partilhar no Bluesky|Enviar por email|Copiar Link|Guardar|Comentar|Alertas|Benefícios exclusivos\?|TORNE-SE PREMIUM)$/i.test(normalized);
 }
 
 function decodeStoredEntities(value) {
@@ -2096,16 +2106,11 @@ function mergeInteractions(current = {}, incoming = {}) {
 
 function renderInteractionMetrics(item) {
   const interactions = item.interactions || {};
-  readerLikes.textContent = metricText(interactions.likes, item.articleLoading);
-  readerShares.textContent = metricText(interactions.shares, item.articleLoading);
-  readerComments.textContent = metricText(interactions.comments, item.articleLoading);
-
   const hasNumbers = [interactions.likes, interactions.shares, interactions.comments]
     .some((value) => numberOrNull(value) !== null);
 
-  if (item.articleLoading) {
-    readerNote.textContent = "A obter texto completo e interações disponíveis...";
-    return;
+  if (readerMetrics) {
+    readerMetrics.hidden = true;
   }
 
   if (hasNumbers) {
@@ -2118,17 +2123,16 @@ function renderInteractionMetrics(item) {
     return;
   }
 
-  const shareTargets = item.shareTargets?.length ? ` O site tem botões para ${item.shareTargets.join(" e ")}, mas não publica os totais.` : "";
-  readerNote.textContent = `${item.interactionsMessage || "A origem não disponibiliza contagens públicas de gostos, partilhas ou comentários."}${shareTargets}`;
+  readerNote.textContent = "";
 }
 
-function metricText(value, loading) {
+function metricText(value) {
   const number = numberOrNull(value);
   if (number !== null) {
     return new Intl.NumberFormat("pt-PT").format(number);
   }
 
-  return loading ? "..." : "n/d";
+  return "n/d";
 }
 
 function firstNumber(...values) {

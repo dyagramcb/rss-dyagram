@@ -212,6 +212,22 @@ h1 {
   align-items: center;
 }
 
+.feed-create-panel {
+  margin-bottom: 16px;
+  color: var(--muted-strong);
+}
+
+.feed-create-panel summary {
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.feed-create-panel .add-feed {
+  margin-top: 12px;
+}
+
 .add-feed,
 .group-create {
   display: grid;
@@ -724,10 +740,14 @@ h2 {
 }
 
 .reader-metrics {
-  display: grid;
+  display: none;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-top: 22px;
+}
+
+.reader-metrics[hidden] {
+  display: none;
 }
 
 .reader-metric {

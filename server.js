@@ -1160,9 +1160,7 @@ function parseArticle(html, articleUrl) {
       comments,
       reactions: null,
       available: comments !== null,
-      message: comments === null
-        ? "A fonte publica o artigo, mas não expõe contagens públicas de gostos ou partilhas."
-        : ""
+      message: ""
     }
   };
 }
@@ -1950,10 +1948,20 @@ function cleanupArticleText(text) {
     .map((line) => line.trim())
     .filter((line) => line
       && !/^VER NO FACEBOOK$/i.test(line)
+      && !isArticleActionLine(line)
       && !/(obs_ads|queue_slot|web_article_middle|paywall_hide|script_id|"bidder"|"supplyType")/i.test(line))
     .join("\n\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function isArticleActionLine(line) {
+  const normalized = String(line || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return /^(?:0|-->|-|Partilhar notícia|Partilhar no Facebook|Partilhar no WhatsApp|Partilhar no Messenger|Partilhar no Twitter|Partilhar no LinkedIn|Partilhar no Pinterest|Partilhar no Threads|Partilhar no Bluesky|Enviar por email|Copiar Link|Guardar|Comentar|Alertas|Benefícios exclusivos\?|TORNE-SE PREMIUM)$/i.test(normalized);
 }
 
 function decodeJsonString(value) {

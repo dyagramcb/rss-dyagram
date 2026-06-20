@@ -17,7 +17,7 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" href="/icons/rss-dyagram.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/icons/rss-dyagram-192.png">
-    <link rel="stylesheet" href="/styles.css?v=20260610-html-entities-fix-1">
+    <link rel="stylesheet" href="/styles.css?v=20260620-hide-reader-interactions-1">
   </head>
   <body>
     <div class="drawer-backdrop" id="drawer-backdrop"></div>
@@ -45,26 +45,30 @@
           </div>
         </div>
 
-        <form class="add-feed" id="add-feed-form">
-          <label for="feed-url">Adicionar RSS</label>
-          <div class="feed-entry">
-            <input id="feed-url" name="feed-url" type="url" placeholder="https://exemplo.pt/feed" required>
-            <button type="submit" aria-label="Adicionar RSS">
-              <span class="icon-plus" aria-hidden="true"></span>
-            </button>
-          </div>
-          <select id="feed-group" name="feed-group" aria-label="Grupo do feed"></select>
-        </form>
+        <details class="feed-create-panel">
+          <summary>Adicionar RSS e grupos</summary>
 
-        <form class="group-create" id="group-create-form">
-          <label for="new-group">Criar grupo</label>
-          <div class="feed-entry">
-            <input id="new-group" name="new-group" type="text" placeholder="Ex: Desporto local" required>
-            <button type="submit" aria-label="Criar grupo">
-              <span class="icon-plus" aria-hidden="true"></span>
-            </button>
-          </div>
-        </form>
+          <form class="add-feed" id="add-feed-form">
+            <label for="feed-url">Adicionar RSS</label>
+            <div class="feed-entry">
+              <input id="feed-url" name="feed-url" type="url" placeholder="https://exemplo.pt/feed" required>
+              <button type="submit" aria-label="Adicionar RSS">
+                <span class="icon-plus" aria-hidden="true"></span>
+              </button>
+            </div>
+            <select id="feed-group" name="feed-group" aria-label="Grupo do feed"></select>
+          </form>
+
+          <form class="group-create" id="group-create-form">
+            <label for="new-group">Criar grupo</label>
+            <div class="feed-entry">
+              <input id="new-group" name="new-group" type="text" placeholder="Ex: Desporto local" required>
+              <button type="submit" aria-label="Criar grupo">
+                <span class="icon-plus" aria-hidden="true"></span>
+              </button>
+            </div>
+          </form>
+        </details>
 
         <details class="group-manager" id="group-manager">
           <summary>Gerir grupos e feeds</summary>
@@ -126,7 +130,7 @@
         <article class="reader-article">
           <h2 id="reader-title"></h2>
           <p class="reader-meta" id="reader-meta"></p>
-          <div class="reader-metrics" id="reader-metrics" aria-label="Interações da notícia">
+          <div class="reader-metrics" id="reader-metrics" aria-label="Interações da notícia" hidden>
             <div class="reader-metric">
               <strong id="reader-likes">n/d</strong>
               <span>Gostos</span>
@@ -160,6 +164,6 @@
       </section>
     </main>
 
-    <script src="/app.js?v=20260610-html-entities-fix-1"></script>
+    <script src="/app.js?v=20260620-hide-reader-interactions-1"></script>
   </body>
 </html>
