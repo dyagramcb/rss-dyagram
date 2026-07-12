@@ -41,7 +41,7 @@ const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
 const translationClientTimeoutMs = 45000;
-const appVersion = "20260620-hide-reader-interactions-1";
+const appVersion = "20260712-select-reader-text-1";
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -1657,6 +1657,11 @@ function beginReaderSwipe(event) {
     return;
   }
 
+  if (isReaderSelectableTarget(event.target)) {
+    readerSwipeStart = null;
+    return;
+  }
+
   readerSwipeStart = {
     x: event.clientX,
     y: event.clientY,
@@ -1676,6 +1681,10 @@ function finishReaderSwipe(event) {
   const elapsed = Date.now() - readerSwipeStart.time;
   readerSwipeStart = null;
 
+  if (hasReaderTextSelection()) {
+    return;
+  }
+
   if (
     deltaX > 72
     && Math.abs(deltaY) < 90
@@ -1688,6 +1697,19 @@ function finishReaderSwipe(event) {
 
 function cancelReaderSwipe() {
   readerSwipeStart = null;
+}
+
+function isReaderSelectableTarget(target) {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return Boolean(target.closest("#reader-title, .reader-meta, .reader-note, .reader-translation-note, .reader-body, .reader-links"));
+}
+
+function hasReaderTextSelection() {
+  const selection = window.getSelection && window.getSelection();
+  return Boolean(selection && selection.toString().trim());
 }
 
 function isRead(item) {

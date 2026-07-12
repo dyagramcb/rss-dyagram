@@ -725,6 +725,9 @@ h2 {
 .reader-article {
   overflow-y: auto;
   padding: 24px 30px 84px;
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .reader-article h2 {
@@ -813,6 +816,8 @@ h2 {
   font-size: clamp(16px, 3vw, 19px);
   line-height: 1.45;
   white-space: pre-line;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .reader-links {
