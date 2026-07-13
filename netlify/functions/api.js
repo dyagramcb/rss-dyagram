@@ -5,6 +5,7 @@ api.setSettingsStoreFactory(() => getStore("rss-dyagram"));
 
 const {
   buildWidgetPayload,
+  buildWidgetRefreshPayload,
   discoverFeed,
   fetchArticle,
   fetchCachedFeed,
@@ -78,16 +79,7 @@ exports.handler = async (event) => {
 
   if (pathname === "/api/widget-refresh") {
     try {
-      const refresh = await refreshCachedFeeds({
-        force: true,
-        maxRegular: 8,
-        maxFacebook: 2,
-        budgetMs: 9000
-      });
-      return json(200, {
-        ...await buildWidgetPayload(),
-        refresh
-      });
+      return json(200, await buildWidgetRefreshPayload());
     } catch (error) {
       return json(500, { error: error.message || "Não foi possível atualizar o widget." });
     }

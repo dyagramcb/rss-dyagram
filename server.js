@@ -458,6 +458,7 @@ async function refreshCachedFeeds(options = {}) {
   const selectedFeeds = [...regularFeeds, ...facebookFeeds];
   const deadline = Date.now() + (options.budgetMs ?? feedRefreshBudgetMs);
   const refreshed = [];
+  const refreshedItems = [];
   const errors = [];
   const skipped = Math.max(0, staleFeeds.length - selectedFeeds.length);
 
@@ -474,6 +475,9 @@ async function refreshCachedFeeds(options = {}) {
         updatedAt: updated.updatedAt || new Date().toISOString(),
         itemCount: countFeedItems(updated.body)
       });
+      if (options.includeItems) {
+        refreshedItems.push(...parseWidgetFeedItems(updated.body, feed));
+      }
     } catch (error) {
       await writeFeedCache(feed.url, {
         ...(await readFeedCache(feed.url) || {}),
@@ -492,13 +496,55 @@ async function refreshCachedFeeds(options = {}) {
     }
   }
 
-  return {
+  const result = {
     refreshed,
     errors,
     stale: staleFeeds.length,
     skipped: skipped + Math.max(0, selectedFeeds.length - refreshed.length - errors.length),
     scoped: scopedFeeds.length,
     generatedAt: new Date().toISOString()
+  };
+
+  if (options.includeItems) {
+    const seen = new Set();
+    result.items = refreshedItems
+      .sort((left, right) => right.timestamp - left.timestamp)
+      .filter((item) => {
+        const key = item.url || item.id;
+        if (!key || seen.has(key)) {
+          return false;
+        }
+
+        seen.add(key);
+        return true;
+      })
+      .slice(0, widgetItemLimit)
+      .map(({ timestamp, ...item }) => item);
+  }
+
+  return result;
+}
+
+async function buildWidgetRefreshPayload() {
+  const result = await refreshCachedFeeds({
+    force: true,
+    maxRegular: 8,
+    maxFacebook: 2,
+    budgetMs: 9000,
+    includeItems: true
+  });
+  const { items = [], ...refresh } = result;
+
+  return {
+    version: 1,
+    app: "Rss Dyagram",
+    siteUrl: publicSiteUrl,
+    generatedAt: result.generatedAt,
+    updatedAt: result.generatedAt,
+    itemCount: items.length,
+    unreadWindow: widgetItemLimit,
+    items,
+    refresh
   };
 }
 
@@ -2340,16 +2386,7 @@ const server = http.createServer(async (req, res) => {
 
   if (requestUrl.pathname === "/api/widget-refresh") {
     try {
-      const refresh = await refreshCachedFeeds({
-        force: true,
-        maxRegular: 8,
-        maxFacebook: 2,
-        budgetMs: 9000
-      });
-      sendJson(res, 200, {
-        ...await buildWidgetPayload(),
-        refresh
-      });
+      sendJson(res, 200, await buildWidgetRefreshPayload());
     } catch (error) {
       sendJson(res, 500, { error: error.message || "Não foi possível atualizar o widget." });
     }
@@ -2506,6 +2543,7 @@ if (require.main === module) {
 
 module.exports = {
   buildWidgetPayload,
+  buildWidgetRefreshPayload,
   discoverFeed,
   fetchCachedFeed,
   fetchArticle,

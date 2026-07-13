@@ -35,12 +35,30 @@ object WidgetRepository {
             }
 
             val payload = connection.inputStream.bufferedReader().use { it.readText() }
-            val data = parse(JSONObject(payload))
+            val refreshed = parse(JSONObject(payload))
+            val data = if (forceRemote) {
+                merge(WidgetStore.load(context), refreshed)
+            } else {
+                refreshed
+            }
             WidgetStore.save(context, data)
             return data
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun merge(cached: WidgetData, refreshed: WidgetData): WidgetData {
+        val items = (refreshed.items + cached.items)
+            .distinctBy { it.url }
+            .sortedByDescending { it.publishedAt }
+            .take(40)
+
+        return WidgetData(
+            updatedAt = refreshed.updatedAt.ifBlank { cached.updatedAt },
+            generatedAt = refreshed.generatedAt.ifBlank { cached.generatedAt },
+            items = items
+        )
     }
 
     private fun parse(json: JSONObject): WidgetData {
