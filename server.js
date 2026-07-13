@@ -39,6 +39,8 @@ const systemFeeds = [
     group: "Cinema e séries"
   }
 ];
+const publicSiteUrl = process.env.RSS_DYAGRAM_SITE_URL || "https://rss-dyagram.netlify.app/";
+const widgetItemLimit = 40;
 const retiredSystemFeedUrls = [
   "https://rss-dyagram.netlify.app/capital-portuguesa-cultura.xml"
 ];
@@ -75,6 +77,15 @@ function sendBuffer(res, status, body, type = "application/octet-stream") {
 
 function sendJson(res, status, payload) {
   send(res, status, JSON.stringify(payload), "application/json; charset=utf-8");
+}
+
+function sendCachedJson(res, status, payload, maxAge = 3600) {
+  res.writeHead(status, {
+    "Access-Control-Allow-Origin": "*",
+    "Cache-Control": `public, max-age=${maxAge}, stale-while-revalidate=${maxAge * 2}`,
+    "Content-Type": "application/json; charset=utf-8"
+  });
+  res.end(JSON.stringify(payload));
 }
 
 async function readSharedSettings() {
@@ -389,6 +400,44 @@ async function readCachedNews(options = {}) {
   };
 }
 
+async function buildWidgetPayload(options = {}) {
+  const settings = await readSharedSettings();
+  const limit = Math.max(1, Math.min(Number(options.limit) || widgetItemLimit, 100));
+  const cachedFeeds = await Promise.all(settings.feeds.map(async (feed) => ({
+    feed,
+    cached: await readFeedCache(feed.url)
+  })));
+  const items = cachedFeeds.flatMap(({ feed, cached }) => (
+    cached?.body ? parseWidgetFeedItems(cached.body, feed) : []
+  ));
+  const seen = new Set();
+  const uniqueItems = items
+    .sort((left, right) => right.timestamp - left.timestamp)
+    .filter((item) => {
+      const key = item.url || item.id;
+      if (!key || seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
+  const latestCacheUpdate = cachedFeeds
+    .map(({ cached }) => Date.parse(cached?.updatedAt || "") || 0)
+    .sort((left, right) => right - left)[0] || 0;
+
+  return {
+    version: 1,
+    app: "Rss Dyagram",
+    siteUrl: publicSiteUrl,
+    generatedAt: new Date().toISOString(),
+    updatedAt: latestCacheUpdate ? new Date(latestCacheUpdate).toISOString() : "",
+    itemCount: uniqueItems.length,
+    unreadWindow: limit,
+    items: uniqueItems.slice(0, limit).map(({ timestamp, ...item }) => item)
+  };
+}
+
 async function refreshCachedFeeds(options = {}) {
   const settings = await readSharedSettings();
   const scopedFeeds = selectFeedsByScope(settings.feeds, options);
@@ -497,7 +546,7 @@ async function readFeedCache(feedUrl) {
   }
 
   try {
-    const raw = await fs.promises.readFile(path.join(feedCacheDir, `${key}.json`), "utf8");
+    const raw = await fs.promises.readFile(feedCacheFilePath(feedUrl), "utf8");
     return normalizeFeedCache(JSON.parse(raw), feedUrl);
   } catch (error) {
     if (error.code === "ENOENT") {
@@ -523,7 +572,7 @@ async function writeFeedCache(feedUrl, payload) {
   }
 
   await fs.promises.mkdir(feedCacheDir, { recursive: true });
-  await fs.promises.writeFile(path.join(feedCacheDir, `${key}.json`), JSON.stringify(entry, null, 2));
+  await fs.promises.writeFile(feedCacheFilePath(feedUrl), JSON.stringify(entry, null, 2));
   return entry;
 }
 
@@ -544,9 +593,78 @@ function feedCacheKey(feedUrl) {
   return `feed-cache/${crypto.createHash("sha1").update(String(feedUrl || "")).digest("hex")}`;
 }
 
+function feedCacheFilePath(feedUrl) {
+  const filename = feedCacheKey(feedUrl).replace(/^feed-cache\//, "");
+  return path.join(feedCacheDir, `${filename}.json`);
+}
+
 function countFeedItems(body) {
   const text = String(body || "");
   return (text.match(/<item\b/gi) || []).length + (text.match(/<entry\b/gi) || []).length;
+}
+
+function parseWidgetFeedItems(xml, feed) {
+  const rssItems = extractTagBlocks(xml, "item", 80);
+  const entries = rssItems.length ? rssItems : extractTagBlocks(xml, "entry", 80);
+
+  return entries.map((entry) => {
+    const rawTitle = widgetXmlValue(entry, "title") || "Sem título";
+    const rawDescription = widgetXmlValue(entry, "description")
+      || widgetXmlValue(entry, "summary")
+      || widgetXmlValue(entry, "content:encoded")
+      || widgetXmlValue(entry, "content")
+      || "";
+    const url = widgetEntryUrl(entry, feed.url);
+    const rawId = widgetXmlValue(entry, "guid") || widgetXmlValue(entry, "id") || url || rawTitle;
+    const dateValue = widgetXmlValue(entry, "pubDate")
+      || widgetXmlValue(entry, "published")
+      || widgetXmlValue(entry, "updated")
+      || "";
+    const timestamp = Date.parse(dateValue) || 0;
+    const title = htmlToReadableText(rawTitle).replace(/\s+/g, " ").trim() || "Sem título";
+    const description = htmlToReadableText(rawDescription).replace(/\s+/g, " ").trim().slice(0, 220);
+    const image = widgetEntryImage(entry, rawDescription, url || feed.url);
+    const id = crypto.createHash("sha1").update(`${feed.url}:${rawId}`).digest("hex");
+
+    return {
+      id,
+      title,
+      description,
+      source: feed.name,
+      group: feed.group,
+      url,
+      appUrl: url ? `${publicSiteUrl}?article=${encodeURIComponent(url)}` : publicSiteUrl,
+      image,
+      publishedAt: timestamp ? new Date(timestamp).toISOString() : "",
+      timestamp
+    };
+  }).filter((item) => item.url && item.title);
+}
+
+function widgetXmlValue(xml, tagName) {
+  const escapedTag = escapeRegExp(tagName);
+  const match = String(xml || "").match(new RegExp(`<${escapedTag}\\b[^>]*>([\\s\\S]*?)<\\/${escapedTag}>`, "i"));
+  if (!match) {
+    return "";
+  }
+
+  return decodeHtmlEntities(match[1]
+    .replace(/^\s*<!\[CDATA\[/i, "")
+    .replace(/\]\]>\s*$/i, "")
+    .trim());
+}
+
+function widgetEntryUrl(entry, fallbackUrl) {
+  const textLink = widgetXmlValue(entry, "link");
+  const atomLink = String(entry || "").match(/<link\b[^>]*\bhref=["']([^"']+)["'][^>]*>/i)?.[1] || "";
+  const candidate = decodeHtmlEntities(atomLink || textLink).trim();
+  return toAbsoluteUrl(candidate, fallbackUrl) || fallbackUrl;
+}
+
+function widgetEntryImage(entry, description, baseUrl) {
+  const mediaUrl = String(entry || "").match(/<(?:enclosure|media:content|media:thumbnail)\b[^>]*\burl=["']([^"']+)["'][^>]*>/i)?.[1] || "";
+  const htmlImage = String(description || "").match(/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/i)?.[1] || "";
+  return toAbsoluteUrl(decodeHtmlEntities(mediaUrl || htmlImage).trim(), baseUrl);
 }
 
 function sameSettingFeedUrl(left, right) {
@@ -2211,6 +2329,15 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (["/widget.json", "/api/widget", "/api/widget.json"].includes(requestUrl.pathname)) {
+    try {
+      sendCachedJson(res, 200, await buildWidgetPayload());
+    } catch (error) {
+      sendJson(res, 500, { error: error.message || "Não foi possível preparar o widget." });
+    }
+    return;
+  }
+
   if (requestUrl.pathname === "/api/refresh") {
     try {
       sendJson(res, 200, await refreshCachedFeeds({
@@ -2360,6 +2487,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildWidgetPayload,
   discoverFeed,
   fetchCachedFeed,
   fetchArticle,

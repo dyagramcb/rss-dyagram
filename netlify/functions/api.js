@@ -4,6 +4,7 @@ const api = require("../../server");
 api.setSettingsStoreFactory(() => getStore("rss-dyagram"));
 
 const {
+  buildWidgetPayload,
   discoverFeed,
   fetchArticle,
   fetchCachedFeed,
@@ -64,6 +65,14 @@ exports.handler = async (event) => {
       }), cacheHeaders(60));
     } catch (error) {
       return json(500, { error: error.message || "Não foi possível ler a cache de notícias." });
+    }
+  }
+
+  if (["/api/widget", "/api/widget.json"].includes(pathname)) {
+    try {
+      return json(200, await buildWidgetPayload(), widgetCacheHeaders());
+    } catch (error) {
+      return json(500, { error: error.message || "Não foi possível preparar o widget." });
     }
   }
 
@@ -227,5 +236,13 @@ function cacheHeaders(maxAge) {
   return {
     "Cache-Control": `public, max-age=${maxAge}, stale-while-revalidate=${maxAge * 2}`,
     "Netlify-CDN-Cache-Control": `public, max-age=${maxAge}, stale-while-revalidate=3600, durable`
+  };
+}
+
+function widgetCacheHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Cache-Control": "public, max-age=3600, stale-while-revalidate=7200",
+    "Netlify-CDN-Cache-Control": "public, max-age=3600, stale-while-revalidate=86400, durable"
   };
 }

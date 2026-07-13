@@ -41,7 +41,8 @@ const regularFeedRefreshConcurrency = 4;
 const facebookRefreshDelayMs = 4000;
 const itemCacheLimit = 700;
 const translationClientTimeoutMs = 45000;
-const appVersion = "20260712-select-reader-text-1";
+const appVersion = "20260713-android-widget-1";
+let pendingArticleUrl = deepLinkedArticleUrl();
 const initialFeeds = loadFeeds();
 const initialGroups = loadGroups(initialFeeds);
 const state = {
@@ -702,8 +703,48 @@ function applyFeedResults(feedsToLoad, results, previousItems, options = {}) {
   }
   saveItemsCache();
   render();
+  openPendingArticle();
 
   return errors;
+}
+
+function deepLinkedArticleUrl() {
+  try {
+    const value = new URL(window.location.href).searchParams.get("article") || "";
+    const parsed = new URL(value);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function articleUrlKey(value) {
+  try {
+    const parsed = new URL(value);
+    parsed.hash = "";
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return String(value || "").replace(/#.*$/, "").replace(/\/$/, "");
+  }
+}
+
+function openPendingArticle() {
+  if (!pendingArticleUrl) {
+    return false;
+  }
+
+  const pendingKey = articleUrlKey(pendingArticleUrl);
+  const item = state.items.find((candidate) => articleUrlKey(candidate.link) === pendingKey);
+  if (!item) {
+    return false;
+  }
+
+  pendingArticleUrl = "";
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete("article");
+  window.history.replaceState({}, "", `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
+  openReader(itemKey(item));
+  return true;
 }
 
 async function loadFeed(feed) {
@@ -2498,6 +2539,7 @@ startApp();
 
 async function startApp() {
   render();
+  openPendingArticle();
   if (state.items.length) {
     setStatus(`A mostrar ${state.items.length} notícias guardadas. A atualizar em fundo...`);
   }
