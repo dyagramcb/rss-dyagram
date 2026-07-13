@@ -44,6 +44,7 @@ object WidgetStore {
                     WidgetStory(
                         id = item.optString("id"),
                         title = item.optString("title", "Sem título"),
+                        description = item.optString("description"),
                         source = item.optString("source", "Rss Dyagram"),
                         group = item.optString("group"),
                         url = url,
@@ -69,6 +70,7 @@ object WidgetStore {
                 put(JSONObject().apply {
                     put("id", item.id)
                     put("title", item.title)
+                    put("description", item.description)
                     put("source", item.source)
                     put("group", item.group)
                     put("url", item.url)

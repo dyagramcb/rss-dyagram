@@ -52,7 +52,7 @@ object WidgetRepository {
         val items = (refreshed.items + cached.items)
             .distinctBy { it.url }
             .sortedByDescending { it.publishedAt }
-            .take(40)
+            .take(50)
 
         return WidgetData(
             updatedAt = refreshed.updatedAt.ifBlank { cached.updatedAt },
@@ -73,6 +73,7 @@ object WidgetRepository {
                     WidgetStory(
                         id = item.optString("id"),
                         title = item.optString("title", "Sem título"),
+                        description = item.optString("description"),
                         source = item.optString("source", "Rss Dyagram"),
                         group = item.optString("group"),
                         url = url,

@@ -5,14 +5,12 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
-import androidx.glance.LocalSize
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
@@ -50,13 +48,7 @@ import java.util.Date
 import java.util.Locale
 
 class RssDyagramWidget : GlanceAppWidget() {
-    override val sizeMode: SizeMode = SizeMode.Responsive(
-        setOf(
-            DpSize(180.dp, 160.dp),
-            DpSize(280.dp, 240.dp),
-            DpSize(360.dp, 360.dp)
-        )
-    )
+    override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = WidgetStore.load(context)
@@ -70,24 +62,18 @@ class RssDyagramWidget : GlanceAppWidget() {
 
 @Composable
 private fun WidgetContent(context: Context, data: WidgetData, readUrls: Set<String>) {
-    val size = LocalSize.current
-    val visibleCount = when {
-        size.height >= 400.dp -> 16
-        size.height >= 260.dp -> 12
-        else -> 8
-    }
     val unreadCount = data.items.count { it.url !in readUrls }
-    val stories = data.items.take(visibleCount)
+    val stories = data.items.take(50)
 
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
             .background(DayNightColorProvider(Color.White, Ink))
-            .cornerRadius(16.dp)
-            .padding(10.dp)
+            .cornerRadius(18.dp)
+            .padding(14.dp)
     ) {
         Header(context, unreadCount)
-        Spacer(GlanceModifier.height(4.dp))
+        Spacer(GlanceModifier.height(10.dp))
 
         if (stories.isEmpty()) {
             EmptyState()
@@ -109,10 +95,10 @@ private fun WidgetContent(context: Context, data: WidgetData, readUrls: Set<Stri
         }
 
         Text(
-            text = updateLabel(data),
+            text = "${stories.size} notícias · ${updateLabel(data)}",
             style = TextStyle(
                 color = DayNightColorProvider(Muted, MutedDark),
-                fontSize = 8.sp
+                fontSize = 9.sp
             ),
             maxLines = 1
         )
@@ -129,27 +115,27 @@ private fun Header(context: Context, unreadCount: Int) {
     ) {
         Box(
             modifier = GlanceModifier
-                .size(28.dp)
+                .size(36.dp)
                 .background(AccentProvider)
-                .cornerRadius(8.dp),
+                .cornerRadius(10.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "RD",
                 style = TextStyle(
                     color = ColorProvider(Color.White),
-                    fontSize = 11.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
             )
         }
-        Spacer(GlanceModifier.width(7.dp))
+        Spacer(GlanceModifier.width(10.dp))
         Column {
             Text(
                 text = "Rss Dyagram",
                 style = TextStyle(
                     color = DayNightColorProvider(Ink, Color.White),
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 ),
                 maxLines = 1
@@ -158,7 +144,7 @@ private fun Header(context: Context, unreadCount: Int) {
                 text = "$unreadCount por ler",
                 style = TextStyle(
                     color = AccentProvider,
-                    fontSize = 9.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Medium
                 ),
                 maxLines = 1
@@ -169,8 +155,8 @@ private fun Header(context: Context, unreadCount: Int) {
             provider = ImageProvider(R.drawable.ic_refresh),
             contentDescription = "Atualizar",
             modifier = GlanceModifier
-                .size(26.dp)
-                .padding(4.dp)
+                .size(32.dp)
+                .padding(5.dp)
                 .clickable(actionRunCallback<RefreshAction>())
         )
     }
@@ -178,20 +164,64 @@ private fun Header(context: Context, unreadCount: Int) {
 
 @Composable
 private fun StoryRow(context: Context, story: WidgetStory, isRead: Boolean) {
-    Text(
-        text = "${story.source.uppercase(Locale.getDefault())} · ${story.title}",
+    Column(
         modifier = GlanceModifier
             .fillMaxWidth()
             .wrapContentHeight()
             .clickable(actionStartActivity(storyIntent(context, story)))
-            .padding(vertical = 1.dp),
-        style = TextStyle(
-            color = if (isRead) DayNightColorProvider(Muted, MutedDark) else DayNightColorProvider(Ink, Color.White),
-            fontSize = 10.sp,
-            fontWeight = if (isRead) FontWeight.Normal else FontWeight.Medium
-        ),
-        maxLines = 1
-    )
+            .padding(vertical = 8.dp)
+    ) {
+        Text(
+            text = metadataLabel(story),
+            style = TextStyle(
+                color = if (isRead) DayNightColorProvider(Muted, MutedDark) else AccentProvider,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold
+            ),
+            maxLines = 1
+        )
+        Spacer(GlanceModifier.height(3.dp))
+        Text(
+            text = story.title,
+            style = TextStyle(
+                color = if (isRead) DayNightColorProvider(Muted, MutedDark) else DayNightColorProvider(Ink, Color.White),
+                fontSize = 12.sp,
+                fontWeight = if (isRead) FontWeight.Normal else FontWeight.Bold
+            ),
+            maxLines = 2
+        )
+        if (story.description.isNotBlank()) {
+            Spacer(GlanceModifier.height(3.dp))
+            Text(
+                text = story.description,
+                style = TextStyle(
+                    color = DayNightColorProvider(Muted, MutedDark),
+                    fontSize = 10.sp
+                ),
+                maxLines = 2
+            )
+        }
+    }
+}
+
+private fun metadataLabel(story: WidgetStory): String {
+    val parts = listOf(
+        story.source.uppercase(Locale.getDefault()),
+        story.group,
+        publishedLabel(story.publishedAt)
+    ).filter { it.isNotBlank() }
+
+    return parts.joinToString(" · ")
+}
+
+private fun publishedLabel(value: String): String {
+    if (value.isBlank()) return ""
+
+    return runCatching {
+        val input = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+        val date = input.parse(value.take(19)) ?: return ""
+        SimpleDateFormat("dd/MM HH:mm", Locale.forLanguageTag("pt-PT")).format(date)
+    }.getOrDefault("")
 }
 
 @Composable

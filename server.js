@@ -40,7 +40,7 @@ const systemFeeds = [
   }
 ];
 const publicSiteUrl = process.env.RSS_DYAGRAM_SITE_URL || "https://rss-dyagram.netlify.app/";
-const widgetItemLimit = 40;
+const widgetItemLimit = 50;
 const retiredSystemFeedUrls = [
   "https://rss-dyagram.netlify.app/capital-portuguesa-cultura.xml"
 ];

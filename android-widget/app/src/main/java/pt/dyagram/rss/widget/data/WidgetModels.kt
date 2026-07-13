@@ -3,6 +3,7 @@ package pt.dyagram.rss.widget.data
 data class WidgetStory(
     val id: String,
     val title: String,
+    val description: String = "",
     val source: String,
     val group: String,
     val url: String,
