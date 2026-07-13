@@ -9,14 +9,24 @@ import org.json.JSONObject
 
 object WidgetRepository {
     private const val ENDPOINT = "https://rss-dyagram.netlify.app/widget.json"
+    private const val REFRESH_ENDPOINT = "https://rss-dyagram.netlify.app/api/widget-refresh"
 
-    fun refresh(context: Context): WidgetData {
-        val connection = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
+    fun refresh(context: Context, forceRemote: Boolean = false): WidgetData {
+        val endpoint = if (forceRemote) {
+            "$REFRESH_ENDPOINT?t=${System.currentTimeMillis()}"
+        } else {
+            ENDPOINT
+        }
+        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
             connectTimeout = 10_000
-            readTimeout = 12_000
+            readTimeout = if (forceRemote) 20_000 else 12_000
             requestMethod = "GET"
             setRequestProperty("Accept", "application/json")
             setRequestProperty("User-Agent", "RssDyagramWidget/1.0")
+            if (forceRemote) {
+                useCaches = false
+                setRequestProperty("Cache-Control", "no-cache")
+            }
         }
 
         try {

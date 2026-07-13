@@ -11,6 +11,6 @@ class RefreshAction : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters
     ) {
-        WidgetSyncWorker.enqueueNow(context)
+        WidgetSyncWorker.enqueueNow(context, forceRemote = true)
     }
 }

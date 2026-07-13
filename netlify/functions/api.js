@@ -76,6 +76,23 @@ exports.handler = async (event) => {
     }
   }
 
+  if (pathname === "/api/widget-refresh") {
+    try {
+      const refresh = await refreshCachedFeeds({
+        force: true,
+        maxRegular: 8,
+        maxFacebook: 2,
+        budgetMs: 9000
+      });
+      return json(200, {
+        ...await buildWidgetPayload(),
+        refresh
+      });
+    } catch (error) {
+      return json(500, { error: error.message || "Não foi possível atualizar o widget." });
+    }
+  }
+
   if (pathname === "/api/refresh") {
     try {
       return json(200, await refreshCachedFeeds({

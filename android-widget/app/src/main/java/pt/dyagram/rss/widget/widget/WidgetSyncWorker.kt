@@ -24,7 +24,10 @@ class WidgetSyncWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
-            WidgetRepository.refresh(applicationContext)
+            WidgetRepository.refresh(
+                applicationContext,
+                forceRemote = inputData.getBoolean(FORCE_REMOTE_KEY, false)
+            )
             RssDyagramWidget().updateAll(applicationContext)
             Result.success()
         } catch (_: Exception) {
@@ -40,6 +43,7 @@ class WidgetSyncWorker(
     companion object {
         private const val PERIODIC_WORK = "rss-dyagram-widget-periodic"
         private const val IMMEDIATE_WORK = "rss-dyagram-widget-now"
+        private const val FORCE_REMOTE_KEY = "force_remote"
 
         private val connectedNetwork = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -56,9 +60,14 @@ class WidgetSyncWorker(
             )
         }
 
-        fun enqueueNow(context: Context) {
+        fun enqueueNow(context: Context, forceRemote: Boolean = false) {
             val request = OneTimeWorkRequestBuilder<WidgetSyncWorker>()
                 .setConstraints(connectedNetwork)
+                .setInputData(
+                    androidx.work.Data.Builder()
+                        .putBoolean(FORCE_REMOTE_KEY, forceRemote)
+                        .build()
+                )
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 IMMEDIATE_WORK,

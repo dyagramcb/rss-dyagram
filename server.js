@@ -2338,6 +2338,24 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (requestUrl.pathname === "/api/widget-refresh") {
+    try {
+      const refresh = await refreshCachedFeeds({
+        force: true,
+        maxRegular: 8,
+        maxFacebook: 2,
+        budgetMs: 9000
+      });
+      sendJson(res, 200, {
+        ...await buildWidgetPayload(),
+        refresh
+      });
+    } catch (error) {
+      sendJson(res, 500, { error: error.message || "Não foi possível atualizar o widget." });
+    }
+    return;
+  }
+
   if (requestUrl.pathname === "/api/refresh") {
     try {
       sendJson(res, 200, await refreshCachedFeeds({

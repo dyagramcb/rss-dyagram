@@ -19,7 +19,9 @@ O site publica a pasta `public` e usa a função `netlify/functions/api.js` para
 
 O projeto nativo está em `android-widget/`. O widget usa Jetpack Glance, lê o resumo
 partilhado em `https://rss-dyagram.netlify.app/widget.json` e atualiza de hora a hora
-apenas quando existe ligação à Internet. A última resposta fica guardada no dispositivo.
+apenas quando existe ligação à Internet. Mostra pelo menos oito notícias numa lista
+deslocável; o botão de atualização sincroniza as fontes antes de substituir o conteúdo.
+A última resposta fica guardada no dispositivo.
 
 Para compilar no Android Studio, abre a pasta `android-widget`, espera pela sincronização
 do Gradle e executa a configuração `app`. Depois de instalar a aplicação no Android:

@@ -19,6 +19,8 @@ import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.lazy.itemsIndexed
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.color.ColorProvider as DayNightColorProvider
@@ -50,9 +52,9 @@ import java.util.Locale
 class RssDyagramWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Responsive(
         setOf(
-            DpSize(180.dp, 110.dp),
-            DpSize(280.dp, 180.dp),
-            DpSize(360.dp, 260.dp)
+            DpSize(180.dp, 300.dp),
+            DpSize(280.dp, 400.dp),
+            DpSize(360.dp, 520.dp)
         )
     )
 
@@ -70,9 +72,9 @@ class RssDyagramWidget : GlanceAppWidget() {
 private fun WidgetContent(context: Context, data: WidgetData, readUrls: Set<String>) {
     val size = LocalSize.current
     val visibleCount = when {
-        size.height >= 250.dp -> 4
-        size.height >= 175.dp -> 3
-        else -> 1
+        size.height >= 400.dp -> 16
+        size.height >= 260.dp -> 12
+        else -> 8
     }
     val unreadCount = data.items.count { it.url !in readUrls }
     val stories = data.items.take(visibleCount)
@@ -90,15 +92,22 @@ private fun WidgetContent(context: Context, data: WidgetData, readUrls: Set<Stri
         if (stories.isEmpty()) {
             EmptyState()
         } else {
-            stories.forEachIndexed { index, story ->
-                StoryRow(context, story, story.url in readUrls)
-                if (index < stories.lastIndex) {
-                    Divider()
+            LazyColumn(
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .defaultWeight()
+            ) {
+                itemsIndexed(stories) { index, story ->
+                    Column {
+                        StoryRow(context, story, story.url in readUrls)
+                        if (index < stories.lastIndex) {
+                            Divider()
+                        }
+                    }
                 }
             }
         }
 
-        Spacer(GlanceModifier.defaultWeight())
         Text(
             text = updateLabel(data),
             style = TextStyle(
@@ -174,7 +183,7 @@ private fun StoryRow(context: Context, story: WidgetStory, isRead: Boolean) {
             .fillMaxWidth()
             .wrapContentHeight()
             .clickable(actionStartActivity(storyIntent(context, story)))
-            .padding(vertical = 5.dp)
+            .padding(vertical = 4.dp)
     ) {
         Text(
             text = story.source.uppercase(Locale.getDefault()),
@@ -189,10 +198,10 @@ private fun StoryRow(context: Context, story: WidgetStory, isRead: Boolean) {
             text = story.title,
             style = TextStyle(
                 color = if (isRead) DayNightColorProvider(Muted, MutedDark) else DayNightColorProvider(Ink, Color.White),
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 fontWeight = if (isRead) FontWeight.Normal else FontWeight.Medium
             ),
-            maxLines = 2
+            maxLines = 1
         )
     }
 }
