@@ -52,9 +52,9 @@ import java.util.Locale
 class RssDyagramWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Responsive(
         setOf(
-            DpSize(180.dp, 300.dp),
-            DpSize(280.dp, 400.dp),
-            DpSize(360.dp, 520.dp)
+            DpSize(180.dp, 160.dp),
+            DpSize(280.dp, 240.dp),
+            DpSize(360.dp, 360.dp)
         )
     )
 
@@ -83,11 +83,11 @@ private fun WidgetContent(context: Context, data: WidgetData, readUrls: Set<Stri
         modifier = GlanceModifier
             .fillMaxSize()
             .background(DayNightColorProvider(Color.White, Ink))
-            .cornerRadius(20.dp)
-            .padding(14.dp)
+            .cornerRadius(16.dp)
+            .padding(10.dp)
     ) {
         Header(context, unreadCount)
-        Spacer(GlanceModifier.height(8.dp))
+        Spacer(GlanceModifier.height(4.dp))
 
         if (stories.isEmpty()) {
             EmptyState()
@@ -112,7 +112,7 @@ private fun WidgetContent(context: Context, data: WidgetData, readUrls: Set<Stri
             text = updateLabel(data),
             style = TextStyle(
                 color = DayNightColorProvider(Muted, MutedDark),
-                fontSize = 10.sp
+                fontSize = 8.sp
             ),
             maxLines = 1
         )
@@ -129,27 +129,27 @@ private fun Header(context: Context, unreadCount: Int) {
     ) {
         Box(
             modifier = GlanceModifier
-                .size(34.dp)
+                .size(28.dp)
                 .background(AccentProvider)
-                .cornerRadius(9.dp),
+                .cornerRadius(8.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "RD",
                 style = TextStyle(
                     color = ColorProvider(Color.White),
-                    fontSize = 13.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
             )
         }
-        Spacer(GlanceModifier.width(9.dp))
+        Spacer(GlanceModifier.width(7.dp))
         Column {
             Text(
                 text = "Rss Dyagram",
                 style = TextStyle(
                     color = DayNightColorProvider(Ink, Color.White),
-                    fontSize = 14.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 ),
                 maxLines = 1
@@ -158,7 +158,7 @@ private fun Header(context: Context, unreadCount: Int) {
                 text = "$unreadCount por ler",
                 style = TextStyle(
                     color = AccentProvider,
-                    fontSize = 11.sp,
+                    fontSize = 9.sp,
                     fontWeight = FontWeight.Medium
                 ),
                 maxLines = 1
@@ -169,8 +169,8 @@ private fun Header(context: Context, unreadCount: Int) {
             provider = ImageProvider(R.drawable.ic_refresh),
             contentDescription = "Atualizar",
             modifier = GlanceModifier
-                .size(30.dp)
-                .padding(5.dp)
+                .size(26.dp)
+                .padding(4.dp)
                 .clickable(actionRunCallback<RefreshAction>())
         )
     }
@@ -178,32 +178,20 @@ private fun Header(context: Context, unreadCount: Int) {
 
 @Composable
 private fun StoryRow(context: Context, story: WidgetStory, isRead: Boolean) {
-    Column(
+    Text(
+        text = "${story.source.uppercase(Locale.getDefault())} · ${story.title}",
         modifier = GlanceModifier
             .fillMaxWidth()
             .wrapContentHeight()
             .clickable(actionStartActivity(storyIntent(context, story)))
-            .padding(vertical = 4.dp)
-    ) {
-        Text(
-            text = story.source.uppercase(Locale.getDefault()),
-            style = TextStyle(
-                color = if (isRead) DayNightColorProvider(Muted, MutedDark) else AccentProvider,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold
-            ),
-            maxLines = 1
-        )
-        Text(
-            text = story.title,
-            style = TextStyle(
-                color = if (isRead) DayNightColorProvider(Muted, MutedDark) else DayNightColorProvider(Ink, Color.White),
-                fontSize = 11.sp,
-                fontWeight = if (isRead) FontWeight.Normal else FontWeight.Medium
-            ),
-            maxLines = 1
-        )
-    }
+            .padding(vertical = 1.dp),
+        style = TextStyle(
+            color = if (isRead) DayNightColorProvider(Muted, MutedDark) else DayNightColorProvider(Ink, Color.White),
+            fontSize = 10.sp,
+            fontWeight = if (isRead) FontWeight.Normal else FontWeight.Medium
+        ),
+        maxLines = 1
+    )
 }
 
 @Composable
