@@ -53,7 +53,7 @@ Em produção, as Netlify Functions obtêm acesso ao armazenamento do site atrav
 - Feeds, grupos e cache partilhada: continuam no armazenamento Netlify, não nos ficheiros Git.
 - Estado de leitura: está no `localStorage` de cada browser/origem, nas chaves `rss-reader-read-ids`, `rss-reader-feeds`, `rss-reader-groups` e `rss-reader-items-cache`. Não é transferido pelo GitHub nem acompanha a mudança de origem para `localhost`.
 - Passwords, sessões de login e tokens: não foram copiados. Não importar a conversa original porque contém um token exposto.
-- Automação semanal: a especificação acompanha o código, mas a recorrência continua local até existir um agendamento cloud confirmado. Não desativar a original antes de validar a substituta.
+- Automação semanal: migrada para a tarefa `Publicar estreias semanais (cloud)` no ChatGPT Work, ativa aos domingos às 09:00, Europe/Lisbon. O teste publicou `d4cc541` e confirmou o RSS e a cache online. A original no Codex desktop ficou pausada, preservada como alternativa; não manter ambas ativas.
 
 As cópias locais antigas podem conter alterações não publicadas; não substituir o `main` atual por essas cópias sem comparação. Esta transferência tem como base o repositório canónico, não todos os ficheiros de outras aplicações existentes no computador.
 
