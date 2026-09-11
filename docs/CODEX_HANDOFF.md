@@ -14,10 +14,10 @@ Atualizado em 11 de setembro de 2026. Este documento é uma síntese sanitizada 
 
 ## Como continuar no Codex cloud
 
-1. Abrir `https://chatgpt.com/codex` com a mesma conta ChatGPT.
-2. Ligar o GitHub e autorizar o repositório `dyagramcb/rss-dyagram`.
-3. Criar um ambiente cloud para o repositório e selecionar o branch `main`.
-4. Usar Node.js 24 e definir o comando de configuração e manutenção como `bash scripts/codex-setup.sh`.
+1. Abrir `https://chatgpt.com/codex/cloud` com a mesma conta ChatGPT.
+2. A ligação GitHub ao repositório `dyagramcb/rss-dyagram` já foi confirmada.
+3. Selecionar o ambiente existente `rss-dyagram` e o branch `main`; não criar outro ambiente duplicado.
+4. O ambiente usa Node.js 22 e o comando de configuração e manutenção `bash scripts/codex-setup.sh`.
 5. Ativar acesso de rede apenas aos domínios necessários para a tarefa.
 6. Começar sem credenciais de produção. O servidor funciona com armazenamento local e os testes não precisam de segredos.
 7. Começar uma tarefa com: `Lê AGENTS.md e docs/CODEX_HANDOFF.md, confirma o estado de main e continua o desenvolvimento do Rss Dyagram.`
@@ -25,6 +25,8 @@ Atualizado em 11 de setembro de 2026. Este documento é uma síntese sanitizada 
 O `AGENTS.md` da raiz é lido automaticamente pelo Codex antes de trabalhar e contém as regras permanentes do projeto.
 
 O script instala as dependências, valida a sintaxe e testa o servidor HTTP, as definições, a cache e o widget com um feed local. Não publica nem altera dados online. Pode ser reutilizado quando o ambiente recuperar uma cache antiga.
+
+Em 11 de setembro de 2026, o ambiente cloud foi criado e guardado. O teste interativo do próprio Codex concluiu a configuração e a manutenção com Node.js `v22.22.2`: instalação e build aprovados, um teste funcional aprovado e zero falhas em ambas as fases. A cache pós-configuração ficou ativa, o acesso à Internet do agente ficou desligado e não foram adicionados segredos. Esta validação não é uma compilação Android nem uma execução da pesquisa semanal.
 
 Para alterações locais, o agente não precisa de acesso à Internet depois da instalação. Pesquisa de estreias e testes contra fontes reais exigem acesso aos respetivos domínios; não ativar acesso irrestrito por defeito. A preparação usa o registo npm. Para Android, seguir separadamente as dependências do workflow existente.
 

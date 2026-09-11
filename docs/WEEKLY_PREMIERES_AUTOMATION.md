@@ -7,6 +7,8 @@
 - Hora: 09:00, fuso Europe/Lisbon.
 - Período pesquisado: semana civil anterior, de segunda-feira a domingo.
 
+Calcular as datas em `Europe/Lisbon`: obter a segunda-feira da semana da execução, subtrair sete dias para o início e um dia para o fim. Confirmar por calendário/código que o início é segunda-feira e o fim domingo; não assumir que o dia 1 do mês é segunda-feira. Por exemplo, uma execução em 11 de setembro de 2026 cobre 31 de agosto a 6 de setembro, não 1 a 7 de setembro.
+
 ## Objetivo
 
 Pesquisar estreias confirmadas para Portugal, atualizar `public/estreias.xml`, publicar em `main`, aguardar o auto-deploy da Netlify e atualizar a cache central. A execução só está concluída quando o novo `guid` estiver acessível no RSS público.
@@ -45,6 +47,11 @@ curl -sS -X POST 'https://rss-dyagram.netlify.app/api/refresh?url=https%3A%2F%2F
 ## Estado ao transferir
 
 - A automação original existe no Codex desktop com o identificador `publicar-estreias-semanais`.
+- Em 11 de setembro de 2026, o modelo local foi atualizado de `gpt-5.4` para `gpt-5.6-terra`, mantendo esforço médio, estado ativo e domingo às 09:00. O modelo anterior já tinha sido retirado; esta correção de configuração não comprova uma nova execução ou publicação.
+- O projeto associado foi alinhado com o diretório de execução já utilizado, sem recorrer ao clone divergente. A pesquisa continua a usar o clone temporário indicado no fluxo técnico.
 - O clone local antigo ficou divergente no passado; por isso o fluxo deve usar sempre um clone limpo do GitHub.
 - A automação conseguiu publicar os commits `4fede64` e `17e0d94`, mas a recorrência local não acompanha automaticamente uma mudança para o browser. Este documento preserva a configuração para recriação no ambiente que passar a executar a tarefa.
 
+O ambiente de desenvolvimento Codex cloud `rss-dyagram` já foi validado. Isso não cria um agendamento cloud. Uma substituição no ChatGPT Work online precisa de confirmar pesquisa web, escrita no GitHub, verificação do auto-deploy e POST de atualização da cache. Manter a automação local ativa até essa substituição ser comprovada.
+
+Referência de compatibilidade: [Tarefas agendadas e atualização de modelos](https://learn.chatgpt.com/docs/automations).
