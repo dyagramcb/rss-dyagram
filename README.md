@@ -2,6 +2,13 @@
 
 Leitor RSS/PWA com grupos, feeds sincronizados e suporte para páginas de Facebook.
 
+## Continuar no Codex
+
+O contexto permanente do projeto está em `AGENTS.md` e o histórico técnico sanitizado
+está em `docs/CODEX_HANDOFF.md`. Ao abrir o repositório no Codex cloud, liga o GitHub,
+seleciona o branch `main`, usa `npm ci` como configuração e adiciona credenciais apenas
+através do gestor de segredos do ambiente.
+
 ## Desenvolvimento local
 
 ```sh
