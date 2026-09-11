@@ -33,6 +33,8 @@
 
 - Instala dependências com `npm ci`.
 - Executa sempre `npm run build` depois de alterar JavaScript.
+- Executa `npm test` para verificar o arranque, definições, cache e widget num diretório temporário isolado, sem credenciais nem pedidos a produção.
+- Para preparar o ambiente cloud, usa `bash scripts/codex-setup.sh`.
 - Para `public/estreias.xml`, executa também `xmllint --noout public/estreias.xml` quando `xmllint` estiver disponível.
 - Verifica `git diff --check` antes do commit.
 - Para alterações visuais, testa pelo menos desktop e telemóvel e confirma que não existe overflow horizontal.
@@ -44,4 +46,3 @@
 - Não faças deploy manual se o auto-deploy estiver operacional.
 - Depois de atualizar `public/estreias.xml`, força a cache com `POST /api/refresh?url=https%3A%2F%2Frss-dyagram.netlify.app%2Festreias.xml&force=1`.
 - Não apagues feeds, grupos ou dados partilhados sem um pedido explícito do utilizador.
-

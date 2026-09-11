@@ -10,19 +10,25 @@ Atualizado em 11 de setembro de 2026. Este documento é uma síntese sanitizada 
 - Produção: `https://rss-dyagram.netlify.app/`
 - Branch de produção: `main`
 - Hospedagem: Netlify, com auto-deploy a partir do GitHub.
-- Commit observado ao preparar este dossiê: `17e0d94` (`Update weekly premieres feed`).
+- Base funcional deste dossiê: `17e0d94` (`Update weekly premieres feed`); documentação de continuidade adicionada em `a6f4527`. Confirmar sempre o `origin/main` atual.
 
 ## Como continuar no Codex cloud
 
 1. Abrir `https://chatgpt.com/codex` com a mesma conta ChatGPT.
 2. Ligar o GitHub e autorizar o repositório `dyagramcb/rss-dyagram`.
 3. Criar um ambiente cloud para o repositório e selecionar o branch `main`.
-4. Definir o comando de configuração como `npm ci`.
+4. Usar Node.js 24 e definir o comando de configuração e manutenção como `bash scripts/codex-setup.sh`.
 5. Ativar acesso de rede apenas aos domínios necessários para a tarefa.
-6. Adicionar no gestor de segredos do ambiente apenas as credenciais realmente necessárias. Nunca colar segredos num chat.
+6. Começar sem credenciais de produção. O servidor funciona com armazenamento local e os testes não precisam de segredos.
 7. Começar uma tarefa com: `Lê AGENTS.md e docs/CODEX_HANDOFF.md, confirma o estado de main e continua o desenvolvimento do Rss Dyagram.`
 
 O `AGENTS.md` da raiz é lido automaticamente pelo Codex antes de trabalhar e contém as regras permanentes do projeto.
+
+O script instala as dependências, valida a sintaxe e testa o servidor HTTP, as definições, a cache e o widget com um feed local. Não publica nem altera dados online. Pode ser reutilizado quando o ambiente recuperar uma cache antiga.
+
+Para alterações locais, o agente não precisa de acesso à Internet depois da instalação. Pesquisa de estreias e testes contra fontes reais exigem acesso aos respetivos domínios; não ativar acesso irrestrito por defeito. A preparação usa o registo npm. Para Android, seguir separadamente as dependências do workflow existente.
+
+Referência: [Ambientes cloud do Codex](https://learn.chatgpt.com/docs/environments/cloud-environment).
 
 ## Segredos e variáveis
 
@@ -36,7 +42,18 @@ O código não contém valores secretos. As variáveis reconhecidas são:
 - `NETLIFY_SITE_ID` ou `SITE_ID`: alternativas usadas pelo cliente de Blobs.
 - `NETLIFY_AUTH_TOKEN`: alternativa para autenticação Netlify em execução local.
 
-Em produção, as Netlify Functions obtêm acesso ao armazenamento do site através do contexto da Netlify. No Codex cloud, adiciona apenas os segredos necessários através das definições do ambiente.
+Em produção, as Netlify Functions obtêm acesso ao armazenamento do site através do contexto da Netlify. No Codex cloud, os segredos do ambiente são disponibilizados durante a configuração e retirados antes da fase do agente. Não os gravar em ficheiros para contornar essa separação. Usar a ligação GitHub integrada para trabalhar com o repositório; manter as credenciais de produção na Netlify.
+
+## O que acompanha a migração
+
+- Código web, servidor, widget Android e histórico de commits: no repositório GitHub.
+- Decisões e requisitos do desenvolvimento: neste documento e em `AGENTS.md`, sem transcrição literal das conversas.
+- Feeds, grupos e cache partilhada: continuam no armazenamento Netlify, não nos ficheiros Git.
+- Estado de leitura: está no `localStorage` de cada browser/origem, nas chaves `rss-reader-read-ids`, `rss-reader-feeds`, `rss-reader-groups` e `rss-reader-items-cache`. Não é transferido pelo GitHub nem acompanha a mudança de origem para `localhost`.
+- Passwords, sessões de login e tokens: não foram copiados. Não importar a conversa original porque contém um token exposto.
+- Automação semanal: a especificação acompanha o código, mas a recorrência continua local até existir um agendamento cloud confirmado. Não desativar a original antes de validar a substituta.
+
+As cópias locais antigas podem conter alterações não publicadas; não substituir o `main` atual por essas cópias sem comparação. Esta transferência tem como base o repositório canónico, não todos os ficheiros de outras aplicações existentes no computador.
 
 ### Aviso de segurança
 
@@ -130,10 +147,13 @@ O histórico Git completo preserva a sequência exata das alterações e as mens
 ```sh
 npm ci
 npm run build
+npm test
 npm start
 ```
 
 A aplicação local fica em `http://localhost:8080/`.
+
+`npm test` é um teste funcional isolado. Não substitui a verificação visual nem testa fontes externas, tradução ou compilação Android. Não inicia um servidor permanente.
 
 Para o RSS semanal:
 
@@ -159,4 +179,3 @@ Para o widget Android, abrir `android-widget/` no Android Studio ou executar o b
 - Não usar o antigo clone local divergente como fonte de verdade. O GitHub é canónico.
 - Proteger a compatibilidade entre servidor local e Netlify Functions, porque ambos reutilizam `server.js`.
 - Verificar sempre desktop e telemóvel quando se altera CSS ou navegação.
-

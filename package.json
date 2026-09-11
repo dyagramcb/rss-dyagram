@@ -1,6 +1,7 @@
 {
   "scripts": {
     "start": "node server.js",
+    "test": "node --test scripts/check-local.mjs",
     "build": "node --check server.js && node --check public/app.js && node --check public/sw.js && node --check netlify/functions/api.js && node --check netlify/functions/sync-feeds.js"
   },
   "dependencies": {
